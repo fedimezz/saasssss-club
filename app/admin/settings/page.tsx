@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Lock, Settings, Loader2, AlertCircle, Check, Upload, Building2,
   Phone, Mail, Link2, Camera, Music2, Palette, Sun, Moon, Eye, Image as ImageIcon, Type,
-  Cpu, Database, RefreshCw, Trash2, ShieldAlert, Zap, CheckCircle2, XCircle, Clock,
+  Cpu, Database, RefreshCw, Trash2, ShieldAlert, Zap, CheckCircle2, XCircle, Clock, PartyPopper, X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useClubSettings } from "@/context/ClubSettingsContext";
@@ -93,6 +93,17 @@ export default function GymSettingsPage() {
   const [uploadingHero, setUploadingHero] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("identity");
   const [clubInfo, setClubInfo] = useState<{ slug: string; publicUrl: string; customDomain: string | null } | null>(null);
+  // Shown once right after /onboarding creates the club and drops the
+  // owner here directly (see app/onboarding/page.tsx). Read from the URL
+  // client-side rather than useSearchParams to avoid a Suspense boundary
+  // for what's a purely cosmetic, dismissable banner.
+  const [showWelcome, setShowWelcome] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("welcome") === "1") {
+      setShowWelcome(true);
+    }
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const heroFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -283,6 +294,26 @@ export default function GymSettingsPage() {
           <p className="text-muted mt-1">Tout ce qui définit votre club sur le site, organisé par section.</p>
         </div>
 
+        {showWelcome && (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] text-sm">
+              <PartyPopper size={18} className="flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold">Votre club est prêt !</p>
+                <p className="mt-0.5 opacity-90">
+                  Personnalisez son nom, son logo et ses couleurs ci-dessous — c&apos;est ce que vos membres verront en premier.
+                </p>
+              </div>
+              <button
+                  type="button"
+                  onClick={() => setShowWelcome(false)}
+                  className="flex-shrink-0 opacity-70 hover:opacity-100"
+                  aria-label="Fermer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+        )}
+
         {!isOwner && (
             <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-500/10 text-amber-600 text-sm">
               <Lock size={16} className="flex-shrink-0" />
@@ -329,178 +360,178 @@ export default function GymSettingsPage() {
                     <div className="space-y-5">
                       {/* Subdomain / public URL widget */}
                       {clubInfo && (
-                        <div className="bg-card border border-border rounded-2xl p-5">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Link2 size={16} className="text-[var(--primary)]" />
-                            <h3 className="font-semibold text-primary text-sm">URL publique du club</h3>
+                          <div className="bg-card border border-border rounded-2xl p-5">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Link2 size={16} className="text-[var(--primary)]" />
+                              <h3 className="font-semibold text-primary text-sm">URL publique du club</h3>
+                            </div>
+                            <div className="flex items-center gap-2 bg-muted/10 border border-border rounded-xl px-3 py-2.5">
+                              <span className="text-sm font-mono text-primary truncate flex-1">{clubInfo.publicUrl}</span>
+                              <button
+                                  type="button"
+                                  onClick={() => { navigator.clipboard.writeText(clubInfo.publicUrl); }}
+                                  className="shrink-0 text-xs text-muted hover:text-primary transition-colors px-2 py-1 rounded hover:bg-muted/20"
+                              >
+                                Copier
+                              </button>
+                              <a
+                                  href={clubInfo.publicUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="shrink-0 text-xs text-[var(--primary)] hover:underline px-2 py-1"
+                              >
+                                Ouvrir ↗
+                              </a>
+                            </div>
+                            <p className="text-xs text-muted mt-2">
+                              Sous-domaine : <code className="font-mono bg-muted/20 px-1 rounded">{clubInfo.slug}</code>
+                              {clubInfo.customDomain && (
+                                  <> · Domaine personnalisé : <code className="font-mono bg-muted/20 px-1 rounded">{clubInfo.customDomain}</code></>
+                              )}
+                            </p>
                           </div>
-                          <div className="flex items-center gap-2 bg-muted/10 border border-border rounded-xl px-3 py-2.5">
-                            <span className="text-sm font-mono text-primary truncate flex-1">{clubInfo.publicUrl}</span>
-                            <button
-                              type="button"
-                              onClick={() => { navigator.clipboard.writeText(clubInfo.publicUrl); }}
-                              className="shrink-0 text-xs text-muted hover:text-primary transition-colors px-2 py-1 rounded hover:bg-muted/20"
-                            >
-                              Copier
-                            </button>
-                            <a
-                              href={clubInfo.publicUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="shrink-0 text-xs text-[var(--primary)] hover:underline px-2 py-1"
-                            >
-                              Ouvrir ↗
-                            </a>
-                          </div>
-                          <p className="text-xs text-muted mt-2">
-                            Sous-domaine : <code className="font-mono bg-muted/20 px-1 rounded">{clubInfo.slug}</code>
-                            {clubInfo.customDomain && (
-                              <> · Domaine personnalisé : <code className="font-mono bg-muted/20 px-1 rounded">{clubInfo.customDomain}</code></>
-                            )}
-                          </p>
-                        </div>
                       )}
 
-                    <div className="bg-card border border-border rounded-2xl p-6">
-                      <div className="flex items-center gap-2 mb-5">
-                        <Building2 size={18} className="text-[var(--primary)]" />
-                        <h2 className="font-semibold text-primary">Identité</h2>
-                      </div>
+                      <div className="bg-card border border-border rounded-2xl p-6">
+                        <div className="flex items-center gap-2 mb-5">
+                          <Building2 size={18} className="text-[var(--primary)]" />
+                          <h2 className="font-semibold text-primary">Identité</h2>
+                        </div>
 
-                      <div className="flex items-center gap-4 mb-5">
-                        <div className="w-16 h-16 rounded-xl bg-muted/30 border border-border flex items-center justify-center overflow-hidden flex-shrink-0">
-                          {settings.logoUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
-                          ) : (
-                              <Building2 size={22} className="text-muted" />
-                          )}
+                        <div className="flex items-center gap-4 mb-5">
+                          <div className="w-16 h-16 rounded-xl bg-muted/30 border border-border flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {settings.logoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                            ) : (
+                                <Building2 size={22} className="text-muted" />
+                            )}
+                          </div>
+                          <div>
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={uploadingLogo}
+                                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border text-sm font-medium text-primary hover:bg-muted/30 disabled:opacity-60"
+                            >
+                              {uploadingLogo ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                              {uploadingLogo ? "Envoi…" : "Changer le logo"}
+                            </button>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  handleLogoSelect(e.target.files?.[0]);
+                                  e.target.value = "";
+                                }}
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <button
-                              onClick={() => fileInputRef.current?.click()}
-                              disabled={uploadingLogo}
-                              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border text-sm font-medium text-primary hover:bg-muted/30 disabled:opacity-60"
-                          >
-                            {uploadingLogo ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                            {uploadingLogo ? "Envoi…" : "Changer le logo"}
-                          </button>
-                          <input
-                              ref={fileInputRef}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                handleLogoSelect(e.target.files?.[0]);
-                                e.target.value = "";
-                              }}
-                          />
-                        </div>
-                      </div>
 
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">Nom du club</label>
-                          <input
-                              type="text"
-                              value={settings.name}
-                              onChange={(e) => set("name", e.target.value)}
-                              className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
-                            <Palette size={11} /> Couleur principale
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                                type="color"
-                                value={settings.primaryColor ?? "#0f172a"}
-                                onChange={(e) => set("primaryColor", e.target.value)}
-                                className="w-11 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
-                            />
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">Nom du club</label>
                             <input
                                 type="text"
-                                value={settings.primaryColor ?? ""}
-                                onChange={(e) => set("primaryColor", e.target.value)}
-                                placeholder="#0f172a"
-                                className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
+                                value={settings.name}
+                                onChange={(e) => set("name", e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
                             />
                           </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
-                            <Sun size={11} /> Fond (mode clair)
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                                type="color"
-                                value={settings.backgroundColor ?? "#ffffff"}
-                                onChange={(e) => set("backgroundColor", e.target.value)}
-                                className="w-11 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
-                            />
+                          <div>
+                            <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                              <Palette size={11} /> Couleur principale
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                  type="color"
+                                  value={settings.primaryColor ?? "#0f172a"}
+                                  onChange={(e) => set("primaryColor", e.target.value)}
+                                  className="w-11 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
+                              />
+                              <input
+                                  type="text"
+                                  value={settings.primaryColor ?? ""}
+                                  onChange={(e) => set("primaryColor", e.target.value)}
+                                  placeholder="#0f172a"
+                                  className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                              <Sun size={11} /> Fond (mode clair)
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                  type="color"
+                                  value={settings.backgroundColor ?? "#ffffff"}
+                                  onChange={(e) => set("backgroundColor", e.target.value)}
+                                  className="w-11 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
+                              />
+                              <input
+                                  type="text"
+                                  value={settings.backgroundColor ?? ""}
+                                  onChange={(e) => set("backgroundColor", e.target.value)}
+                                  placeholder="#ffffff"
+                                  className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                              <Moon size={11} /> Fond (mode sombre)
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                  type="color"
+                                  value={settings.backgroundColorDark ?? "#0a0a0a"}
+                                  onChange={(e) => set("backgroundColorDark", e.target.value)}
+                                  className="w-11 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
+                              />
+                              <input
+                                  type="text"
+                                  value={settings.backgroundColorDark ?? ""}
+                                  onChange={(e) => set("backgroundColorDark", e.target.value)}
+                                  placeholder="#0a0a0a"
+                                  className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
+                              />
+                            </div>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">Adresse</label>
                             <input
                                 type="text"
-                                value={settings.backgroundColor ?? ""}
-                                onChange={(e) => set("backgroundColor", e.target.value)}
-                                placeholder="#ffffff"
-                                className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
+                                value={settings.address ?? ""}
+                                onChange={(e) => set("address", e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
                             />
                           </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
-                            <Moon size={11} /> Fond (mode sombre)
-                          </label>
-                          <div className="flex items-center gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                              <Phone size={11} /> Téléphone
+                            </label>
                             <input
-                                type="color"
-                                value={settings.backgroundColorDark ?? "#0a0a0a"}
-                                onChange={(e) => set("backgroundColorDark", e.target.value)}
-                                className="w-11 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
-                            />
-                            <input
-                                type="text"
-                                value={settings.backgroundColorDark ?? ""}
-                                onChange={(e) => set("backgroundColorDark", e.target.value)}
-                                placeholder="#0a0a0a"
-                                className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
+                                type="tel"
+                                value={settings.phone ?? ""}
+                                onChange={(e) => set("phone", e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
                             />
                           </div>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">Adresse</label>
-                          <input
-                              type="text"
-                              value={settings.address ?? ""}
-                              onChange={(e) => set("address", e.target.value)}
-                              className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
-                            <Phone size={11} /> Téléphone
-                          </label>
-                          <input
-                              type="tel"
-                              value={settings.phone ?? ""}
-                              onChange={(e) => set("phone", e.target.value)}
-                              className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
-                            <Mail size={11} /> Email
-                          </label>
-                          <input
-                              type="email"
-                              value={settings.email ?? ""}
-                              onChange={(e) => set("email", e.target.value)}
-                              className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
-                          />
+                          <div>
+                            <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                              <Mail size={11} /> Email
+                            </label>
+                            <input
+                                type="email"
+                                value={settings.email ?? ""}
+                                onChange={(e) => set("email", e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
                     </div>
                 )}
 

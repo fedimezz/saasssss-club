@@ -60,10 +60,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const { role, user: storedUser } = readAuthFromStorage();
-    setUserRole(role);
-    setUser(storedUser);
-    setIsLoading(false);
+
+    if (role && storedUser) {
+      setUserRole(role);
+      setUser(storedUser);
+      setIsLoading(false);
+    } else {
+      // No local auth state on THIS origin. localStorage never crosses
+      // subdomains, so a user who just authenticated on the apex domain
+      // (e.g. right after /onboarding creates their club) lands on
+      // {slug}.host with an empty localStorage even though their httpOnly
+      // session cookie — which IS shared across subdomains via the
+      // leading-dot cookie domain — is perfectly valid there. Without this
+      // fallback they'd get bounced to a login screen despite already
+      // being authenticated. Ask the server, which checks the cookie.
+      fetch("/api/auth/session", { credentials: "include" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (cancelled || !data?.user) return;
+            localStorage.setItem("role", data.user.role);
+            localStorage.setItem("user", JSON.stringify(data.user));
+            setUserRole(data.user.role);
+            setUser(data.user);
+          })
+          .catch(() => {
+            // No valid session either — genuinely logged out, nothing to do.
+          })
+          .finally(() => {
+            if (!cancelled) setIsLoading(false);
+          });
+    }
 
     const syncFromStorage = () => {
       const { role: r, user: u } = readAuthFromStorage();
@@ -77,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener(AUTH_CHANGE_EVENT, syncFromStorage);
 
     return () => {
+      cancelled = true;
       window.removeEventListener("storage", syncFromStorage);
       window.removeEventListener(AUTH_CHANGE_EVENT, syncFromStorage);
     };

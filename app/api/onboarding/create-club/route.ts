@@ -16,9 +16,9 @@ const schema = z.object({
   phone:    z.string().trim().optional(),
   clubName: z.string().trim().min(2, "Nom du club trop court").max(100),
   slug: z
-    .string().trim().min(3, "Slug trop court").max(40, "Slug trop long")
-    .regex(/^[a-z0-9-]+$/, "Slug : minuscules, chiffres, tirets uniquement")
-    .refine((s) => !s.startsWith("-") && !s.endsWith("-"), "Le slug ne peut pas commencer/finir par un tiret"),
+      .string().trim().min(3, "Slug trop court").max(40, "Slug trop long")
+      .regex(/^[a-z0-9-]+$/, "Slug : minuscules, chiffres, tirets uniquement")
+      .refine((s) => !s.startsWith("-") && !s.endsWith("-"), "Le slug ne peut pas commencer/finir par un tiret"),
   planId: z.string().min(1, "Plan obligatoire"),
 });
 
@@ -71,7 +71,14 @@ export async function POST(request: NextRequest) {
     });
 
     const token = generateToken({ id: owner.id, email: owner.email, role: owner.role, name: owner.name, clubId: owner.clubId });
-    const res = NextResponse.json({ ok: true, club: { id: club.id, slug: club.slug, name: club.name }, user: { id: owner.id, name: owner.name, email: owner.email, role: owner.role } });
+    // Short-lived token for the /api/auth/bridge handoff to the owner's own
+    // subdomain — see that route for why this exists instead of relying on
+    // the cookie below alone.
+    const bridgeToken = generateToken(
+        { id: owner.id, email: owner.email, role: owner.role, name: owner.name, clubId: owner.clubId },
+        "2m"
+    );
+    const res = NextResponse.json({ ok: true, club: { id: club.id, slug: club.slug, name: club.name }, user: { id: owner.id, name: owner.name, email: owner.email, role: owner.role }, bridgeToken });
     res.cookies.set(AUTH_COOKIE_NAME, token, { ...buildAuthCookieOptions(request.url), maxAge: 60 * 60 * 24 * 7 });
     return res;
   } catch (error) {
