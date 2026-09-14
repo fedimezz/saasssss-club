@@ -63,13 +63,37 @@ export function invalidateClubCache(slug: string): void {
  */
 export async function resolveTenantFromRequest(request: Request): Promise<TenantClub | null> {
   const url = new URL(request.url);
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = request.headers.get("host") ?? url.host;
+  const developmentHosts = process.env.NODE_ENV !== "production"
+    ? [
+        forwardedHost,
+        request.headers.get("origin"),
+        request.headers.get("referer"),
+      ].filter(Boolean).map((value) => {
+        try { return new URL(value as string).host; } catch { return value as string; }
+      })
+    : [];
 
   // Dev/test convenience ONLY: an explicit x-club-slug header or ?club=
   // query param lets you exercise multi-tenant behavior on localhost
   // without wildcard DNS/hosts-file setup. Both are completely ignored
   // outside development, so they can never be used to spoof a tenant
   // against a real deployment.
+  const slug = extractSlugFromHost(host) ?? developmentHosts
+    .map((candidate) => extractSlugFromHost(candidate))
+    .find(Boolean) ?? null;
+  if (slug) return resolveClubBySlug(slug);
+
+  if (process.env.NODE_ENV === "production") {
+    const customDomain = host.split(":")[0].toLowerCase();
+    const customClub = await prisma.club.findFirst({
+      where: { customDomain },
+      select: { id: true, slug: true, name: true, status: true },
+    });
+    if (customClub) return customClub;
+  }
+
   if (process.env.NODE_ENV !== "production") {
     const headerSlug = request.headers.get("x-club-slug");
     const querySlug = url.searchParams.get("club");
@@ -77,9 +101,7 @@ export async function resolveTenantFromRequest(request: Request): Promise<Tenant
     if (devSlug) return resolveClubBySlug(devSlug);
   }
 
-  const slug = extractSlugFromHost(host);
-  if (!slug) return null; // apex/platform host — intentionally no tenant
-  return resolveClubBySlug(slug);
+  return null; // apex/platform host — intentionally no tenant
 }
 
 export function isClubUsable(club: TenantClub | null): club is TenantClub {

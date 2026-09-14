@@ -136,12 +136,12 @@ async function main() {
     if (existing) {
       await prisma.user.update({
         where: { id: existing.id },
-        data: { name: SUPER_ADMIN.name, phone: SUPER_ADMIN.phone, password: hashedPassword, isActive: true, role: Role.SUPER_ADMIN },
+        data: { name: SUPER_ADMIN.name, phone: SUPER_ADMIN.phone, password: hashedPassword, isActive: true, role: Role.SUPER_ADMIN, emailVerified: new Date() },
       });
       console.log(`Updated SUPER_ADMIN: ${SUPER_ADMIN.email}`);
     } else {
       await prisma.user.create({
-        data: { ...SUPER_ADMIN, password: hashedPassword, role: Role.SUPER_ADMIN, clubId: null },
+        data: { ...SUPER_ADMIN, password: hashedPassword, role: Role.SUPER_ADMIN, clubId: null, emailVerified: new Date() },
       });
       console.log(`Created SUPER_ADMIN: ${SUPER_ADMIN.email}`);
     }
@@ -201,15 +201,28 @@ async function main() {
       if (existing) {
         await prisma.user.update({
           where: { id: existing.id },
-          data: { name: demoUser.name, phone: demoUser.phone, role: demoUser.role, password: hashedPassword, isActive: true },
+          data: { name: demoUser.name, phone: demoUser.phone, role: demoUser.role, password: hashedPassword, isActive: true, emailVerified: new Date() },
         });
         console.log(`  Updated demo user: ${demoUser.email} (${demoUser.role})`);
       } else {
         await prisma.user.create({
-          data: { ...demoUser, clubId: club.id, isActive: true },
+          data: { ...demoUser, clubId: club.id, isActive: true, emailVerified: new Date() },
         });
         console.log(`  Created demo user: ${demoUser.email} (${demoUser.role})`);
       }
+    }
+
+    const coachUser = await prisma.user.findFirst({
+      where: { clubId: club.id, role: Role.COACH },
+      select: { id: true, name: true, phone: true },
+    });
+    if (coachUser) {
+      await prisma.coach.upsert({
+        where: { userId: coachUser.id },
+        update: { clubId: club.id, name: coachUser.name, phone: coachUser.phone, isActive: true },
+        create: { clubId: club.id, userId: coachUser.id, name: coachUser.name, phone: coachUser.phone, specialties: [], isActive: true },
+      });
+      console.log(`  Coach profile ready: ${coachUser.name}`);
     }
   }
 }

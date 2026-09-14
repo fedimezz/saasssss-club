@@ -2,7 +2,7 @@
 
 import jwt, { type SignOptions } from "jsonwebtoken";
 import prisma from "@/lib/prisma";
-import { resolveTenantFromRequest, isClubUsable } from "@/lib/tenant";
+import { resolveTenantFromRequest, resolveClubBySlug, isClubUsable } from "@/lib/tenant";
 
 export interface JWTPayload {
   id: string;
@@ -124,7 +124,17 @@ async function verifyTenant(
   account: VerifiedAccount,
   request: Request
 ): Promise<{ ok: true } | { ok: false; status: 403 }> {
-  const club = await resolveTenantFromRequest(request);
+  let club = await resolveTenantFromRequest(request);
+  // Next's local dev server can normalize subdomain API requests to the
+  // apex host. Keep local owner/member testing usable without weakening
+  // production host-based tenant isolation.
+  if (!club && process.env.NODE_ENV !== "production" && account.clubId) {
+    const accountClub = await prisma.club.findUnique({
+      where: { id: account.clubId },
+      select: { slug: true },
+    });
+    if (accountClub) club = await resolveClubBySlug(accountClub.slug);
+  }
   if (!isClubUsable(club)) return { ok: false, status: 403 };
   if (account.clubId !== club.id) return { ok: false, status: 403 };
   return { ok: true };

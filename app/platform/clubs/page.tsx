@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Loader2, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 
 interface ClubRow {
   id: string;
@@ -31,6 +31,9 @@ export default function PlatformClubsPage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createForm, setCreateForm] = useState({ name: "", slug: "", planId: "", ownerName: "", ownerEmail: "", ownerPassword: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +51,16 @@ export default function PlatformClubsPage() {
       setLoading(false);
     }
   }, [page, search, status]);
+
+  const createClub = async () => {
+    setCreateError(null);
+    const res = await fetch("/api/platform/clubs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(createForm) });
+    const json = await res.json();
+    if (!res.ok) { setCreateError(json.error ?? "Erreur"); return; }
+    setShowCreate(false);
+    setCreateForm({ name: "", slug: "", planId: "", ownerName: "", ownerEmail: "", ownerPassword: "" });
+    load();
+  };
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -67,6 +80,7 @@ export default function PlatformClubsPage() {
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-1.5 text-[11px] font-bold text-slate-950"><Plus className="h-3.5 w-3.5" /> Nouveau club</button>
           {STATUS_FILTERS.map((s) => (
             <button
               key={s || "all"}
@@ -80,6 +94,17 @@ export default function PlatformClubsPage() {
           ))}
         </div>
       </div>
+
+      {showCreate && (
+        <div className="rounded-2xl border border-emerald-500/30 bg-card p-5">
+          <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-black text-primary">Créer un club</h2><button onClick={() => setShowCreate(false)} aria-label="Fermer"><X className="h-4 w-4" /></button></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([['name','Nom du club'],['slug','Slug'],['planId','ID du plan SaaS'],['ownerName','Nom propriétaire'],['ownerEmail','Email propriétaire'],['ownerPassword','Mot de passe propriétaire']] as const).map(([key,label]) => <input key={key} type={key === 'ownerPassword' ? 'password' : key === 'ownerEmail' ? 'email' : 'text'} placeholder={label} value={createForm[key]} onChange={(e) => setCreateForm({ ...createForm, [key]: e.target.value })} className="rounded-xl border border-border bg-background px-3 py-2.5 text-xs text-primary" />)}
+          </div>
+          {createError && <p className="mt-3 text-xs font-semibold text-rose-500">{createError}</p>}
+          <button onClick={createClub} className="mt-4 rounded-full bg-emerald-500 px-4 py-2 text-xs font-extrabold text-slate-950">Créer le club</button>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         {loading ? (

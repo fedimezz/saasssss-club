@@ -21,6 +21,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, generateToken, AUTH_COOKIE_NAME, buildAuthCookieOptions } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
+    const requestUrl = new URL(request.url);
+    const requestHost = request.headers.get("host") ?? requestUrl.host;
+    const requestProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || requestUrl.protocol.replace(":", "");
+    const requestOrigin = `${requestProtocol}://${requestHost}`;
     const { searchParams } = new URL(request.url);
     const token = searchParams.get("token");
     const redirectParam = searchParams.get("redirect") || "/admin";
@@ -29,12 +33,12 @@ export async function GET(request: NextRequest) {
     const safeRedirect = redirectParam.startsWith("/") ? redirectParam : "/admin";
 
     if (!token) {
-        return NextResponse.redirect(new URL("/platform/login", request.url));
+        return NextResponse.redirect(new URL("/platform/login", requestOrigin));
     }
 
     const payload = verifyToken(token);
     if (!payload) {
-        return NextResponse.redirect(new URL("/platform/login?expired=1", request.url));
+        return NextResponse.redirect(new URL("/platform/login?expired=1", requestOrigin));
     }
 
     const freshToken = generateToken(
@@ -42,7 +46,7 @@ export async function GET(request: NextRequest) {
         "7d"
     );
 
-    const response = NextResponse.redirect(new URL(safeRedirect, request.url));
+    const response = NextResponse.redirect(new URL(safeRedirect, requestOrigin));
     response.cookies.set(AUTH_COOKIE_NAME, freshToken, {
         ...buildAuthCookieOptions(request.url),
         maxAge: 60 * 60 * 24 * 7,

@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
         where: { id: clubId },
         select: {
           name: true,
+          slug: true,
           status: true,
           trialEndsAt: true,
           subscription: {
@@ -93,7 +94,14 @@ export async function GET(request: NextRequest) {
         }
       : null;
 
-    const clubStatus = isOwner ? { status: club?.status, trialEndsAt: club?.trialEndsAt } : null;
+    const clubStatus = isOwner
+      ? {
+          name: club?.name ?? "",
+          slug: club?.slug ?? "",
+          status: club?.status,
+          trialEndsAt: club?.trialEndsAt,
+        }
+      : null;
 
     return NextResponse.json({
       totalMembers,

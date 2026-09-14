@@ -26,8 +26,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Accès refusé" }, { status: auth.status });
     }
 
+    const clubId = auth.user.clubId as string;
     const staff = await prisma.user.findMany({
-      where: { role: { in: ["ADMIN", "OWNER"] } },
+      where: { clubId, role: { in: ["ADMIN", "OWNER"] } },
       select: {
         id: true,
         name: true,

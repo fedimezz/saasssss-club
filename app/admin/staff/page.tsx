@@ -46,6 +46,9 @@ export default function StaffPage() {
   const isOwner = userRole?.toUpperCase() === "OWNER";
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [promotableMembers, setPromotableMembers] = useState<
+    { id: string; name: string; email: string }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -61,10 +64,21 @@ export default function StaffPage() {
   const fetchStaff = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/staff", { credentials: "include" });
-      const data = await res.json();
-      if (res.ok) setStaff(data);
+      const [staffRes, membersRes] = await Promise.all([
+        fetch("/api/admin/staff", { credentials: "include" }),
+        fetch("/api/admin/members?page=1", { credentials: "include" }),
+      ]);
+      const data = await staffRes.json();
+      if (staffRes.ok) setStaff(data);
       else showToast(data.error || "Erreur de chargement", "error");
+
+      if (membersRes.ok) {
+        const membersJson = await membersRes.json();
+        const members = (membersJson.members ?? []) as { id: string; name: string; email: string; role: string }[];
+        setPromotableMembers(
+          members.filter((m) => m.role === "MEMBER").map((m) => ({ id: m.id, name: m.name, email: m.email }))
+        );
+      }
     } catch {
       showToast("Erreur serveur", "error");
     } finally {
@@ -107,6 +121,26 @@ export default function StaffPage() {
       showToast("Erreur serveur", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePromoteMember = async (memberId: string) => {
+    try {
+      const res = await fetch(`/api/admin/staff/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ role: "ADMIN" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Membre promu administrateur", "success");
+        fetchStaff();
+      } else {
+        showToast(data.error || "Erreur", "error");
+      }
+    } catch {
+      showToast("Erreur serveur", "error");
     }
   };
 
@@ -209,6 +243,32 @@ export default function StaffPage() {
           <UserPlus size={16} /> Ajouter un admin
         </button>
       </div>
+
+      {!loading && promotableMembers.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+          <h2 className="font-semibold text-primary text-sm">Promouvoir un membre</h2>
+          <p className="text-xs text-muted">
+            Passez un membre existant au rôle administrateur sans recréer de compte.
+          </p>
+          <ul className="divide-y divide-border">
+            {promotableMembers.map((m) => (
+              <li key={m.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div>
+                  <p className="text-sm font-medium text-primary">{m.name}</p>
+                  <p className="text-xs text-muted">{m.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handlePromoteMember(m.id)}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20"
+                >
+                  Promouvoir admin
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-20">

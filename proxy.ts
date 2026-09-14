@@ -80,6 +80,11 @@ export async function proxy(request: NextRequest) {
     if (extraHeaders) {
       for (const [k, v] of Object.entries(extraHeaders)) headers.set(k, v);
     }
+    if (slug && process.env.NODE_ENV !== "production") {
+      const rewrittenUrl = request.nextUrl.clone();
+      rewrittenUrl.searchParams.set("club", slug);
+      return NextResponse.rewrite(rewrittenUrl, { request: { headers } });
+    }
     return NextResponse.next({ request: { headers } });
   };
 

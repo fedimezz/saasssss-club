@@ -295,21 +295,17 @@ export default function GymSettingsPage() {
         </div>
 
         {showWelcome && (
-            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] text-sm">
-              <PartyPopper size={18} className="flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-semibold">Votre club est prêt !</p>
-                <p className="mt-0.5 opacity-90">
-                  Personnalisez son nom, son logo et ses couleurs ci-dessous — c&apos;est ce que vos membres verront en premier.
-                </p>
-              </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] text-sm">
+              <PartyPopper size={18} className="flex-shrink-0" />
+              <p className="flex-1 font-medium">
+                🎉 Votre club est créé ! Personnalisez-le avant d&apos;inviter vos membres.
+              </p>
               <button
                   type="button"
                   onClick={() => setShowWelcome(false)}
-                  className="flex-shrink-0 opacity-70 hover:opacity-100"
-                  aria-label="Fermer"
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white text-xs font-semibold hover:opacity-90"
               >
-                <X size={16} />
+                Compris
               </button>
             </div>
         )}

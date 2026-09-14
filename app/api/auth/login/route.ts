@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       where: tenant
         ? { clubId: tenant.id, email: normalizedEmail }
         : ownerPortal
-          ? { email: normalizedEmail, role: { in: ["OWNER", "ADMIN"] }, clubId: { not: null } }
+          ? { email: normalizedEmail, role: { in: ["OWNER", "ADMIN", "SUPER_ADMIN"] } }
           : { clubId: null, email: normalizedEmail, role: "SUPER_ADMIN" },
       include: {
         club: { select: { slug: true, name: true } },

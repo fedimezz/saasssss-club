@@ -28,6 +28,10 @@ interface FormData {
   slug: string;
   // Step 3 — plan
   planId: string;
+  primaryColor: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  address: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -188,10 +192,12 @@ function Step1({ data, onChange, errors }: {
   );
 }
 
-function Step2({ data, onChange, errors }: {
+function Step2({ data, onChange, errors, slugChecking, slugAvailable }: {
   data: FormData;
   onChange: (patch: Partial<FormData>) => void;
   errors: Record<string, string>;
+  slugChecking: boolean;
+  slugAvailable: boolean | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const host = appUrl.replace(/^https?:\/\//, "");
@@ -224,7 +230,42 @@ function Step2({ data, onChange, errors }: {
           <p className="text-xs text-muted mt-1">
             Votre site sera accessible à : <code className="font-mono bg-muted/10 px-1 rounded">{data.slug || "mon-club"}.{host}</code>
           </p>
+          {data.slug.length >= 3 && (
+              <p className={`text-xs mt-1 ${slugChecking ? "text-muted" : slugAvailable ? "text-emerald-600" : "text-red-500"}`}>
+                {slugChecking ? "Vérification du sous-domaine…" : slugAvailable ? "Sous-domaine disponible" : "Sous-domaine déjà utilisé"}
+              </p>
+          )}
           <FieldError msg={errors.slug} />
+        </div>
+        <div>
+          <Label>Adresse (optionnel)</Label>
+          <Input placeholder="Adresse de votre club" value={data.address} onChange={(e) => onChange({ address: e.target.value })} />
+        </div>
+      </div>
+  );
+}
+
+function Step3Design({ data, onChange }: { data: FormData; onChange: (patch: Partial<FormData>) => void }) {
+  return (
+      <div className="space-y-4">
+        <div>
+          <Label>Couleur principale</Label>
+          <div className="flex items-center gap-3">
+            <input type="color" value={data.primaryColor} onChange={(e) => onChange({ primaryColor: e.target.value })} className="h-11 w-14 cursor-pointer rounded-lg border border-border bg-card" />
+            <span className="font-mono text-sm text-muted">{data.primaryColor}</span>
+          </div>
+        </div>
+        <div>
+          <Label>Titre de la page d&apos;accueil</Label>
+          <Input placeholder="Bienvenue dans votre club" value={data.heroTitle} onChange={(e) => onChange({ heroTitle: e.target.value })} />
+        </div>
+        <div>
+          <Label>Description courte</Label>
+          <textarea value={data.heroSubtitle} onChange={(e) => onChange({ heroSubtitle: e.target.value })} placeholder="Une expérience sportive pensée pour vous" className="min-h-24 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm text-primary outline-none focus:border-[var(--primary)]" />
+        </div>
+        <div className="rounded-xl border border-border p-4" style={{ borderColor: data.primaryColor }}>
+          <p className="text-lg font-bold" style={{ color: data.primaryColor }}>{data.heroTitle || data.clubName || "Votre club"}</p>
+          <p className="mt-1 text-sm text-muted">{data.heroSubtitle || "Votre espace sportif, votre identité."}</p>
         </div>
       </div>
   );
@@ -312,6 +353,7 @@ function Step3({ data, onChange, plans, plansLoading, plansError, errors }: {
 const STEPS = [
   { label: "Votre compte",   icon: User },
   { label: "Votre club",     icon: Building2 },
+  { label: "Votre design",   icon: Zap },
   { label: "Choisir un plan", icon: CreditCard },
 ];
 
@@ -319,7 +361,8 @@ export default function OnboardingWizardPage() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>({
     name: "", email: "", password: "", phone: "",
-    clubName: "", slug: "", planId: "",
+    clubName: "", slug: "", planId: "", primaryColor: "#6366f1",
+    heroTitle: "", heroSubtitle: "", address: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -327,6 +370,8 @@ export default function OnboardingWizardPage() {
   const [plans, setPlans] = useState<SaasPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [plansError, setPlansError] = useState(false);
+  const [slugChecking, setSlugChecking] = useState(false);
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetch("/api/saas-plans")
@@ -342,7 +387,23 @@ export default function OnboardingWizardPage() {
     const cleared: Record<string, string> = { ...errors };
     Object.keys(p).forEach((k) => delete cleared[k]);
     setErrors(cleared);
+    if (p.slug !== undefined) setSlugAvailable(null);
   };
+
+  useEffect(() => {
+    if (form.slug.length < 3) return;
+    const timer = window.setTimeout(async () => {
+      setSlugChecking(true);
+      try {
+        const response = await fetch(`/api/onboarding/check-slug?slug=${encodeURIComponent(form.slug)}`);
+        const json = await response.json();
+        setSlugAvailable(response.ok && json.available === true);
+      } finally {
+        setSlugChecking(false);
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [form.slug]);
 
   const validateStep = (): boolean => {
     const e: Record<string, string> = {};
@@ -355,8 +416,9 @@ export default function OnboardingWizardPage() {
       if (!form.clubName.trim() || form.clubName.trim().length < 2) e.clubName = "Nom du club trop court";
       if (!form.slug || form.slug.length < 3) e.slug = "Slug trop court (3 car. min.)";
       if (!/^[a-z0-9-]+$/.test(form.slug)) e.slug = "Lettres minuscules, chiffres et tirets uniquement";
+      if (slugAvailable === false) e.slug = "Ce sous-domaine est déjà utilisé";
     }
-    if (step === 2) {
+    if (step === 3) {
       if (!form.planId) e.planId = "Choisissez un plan pour continuer";
     }
     setErrors(e);
@@ -395,7 +457,9 @@ export default function OnboardingWizardPage() {
       // cookie may not reach {slug}.host (see ownerSettingsDestination).
       // Hand off through /api/auth/bridge instead, which sets a fresh
       // cookie on the subdomain itself.
-      window.location.href = ownerSettingsDestination(json.club.slug, json.bridgeToken);
+      const bridgeUrl = ownerSettingsDestination(json.club.slug, json.bridgeToken);
+      console.log("[onboarding] redirecting to club bridge:", bridgeUrl);
+      window.location.href = bridgeUrl;
     } catch {
       setGlobalError("Erreur réseau. Vérifiez votre connexion.");
     } finally {
@@ -445,8 +509,9 @@ export default function OnboardingWizardPage() {
 
             {/* Step content */}
             {step === 0 && <Step1 data={form} onChange={patch} errors={errors} />}
-            {step === 1 && <Step2 data={form} onChange={patch} errors={errors} />}
-            {step === 2 && <Step3 data={form} onChange={patch} plans={plans} plansLoading={plansLoading} plansError={plansError} errors={errors} />}
+            {step === 1 && <Step2 data={form} onChange={patch} errors={errors} slugChecking={slugChecking} slugAvailable={slugAvailable} />}
+            {step === 2 && <Step3Design data={form} onChange={patch} />}
+            {step === 3 && <Step3 data={form} onChange={patch} plans={plans} plansLoading={plansLoading} plansError={plansError} errors={errors} />}
 
             {/* Navigation */}
             <div className="flex items-center justify-between mt-6 pt-5 border-t border-border">

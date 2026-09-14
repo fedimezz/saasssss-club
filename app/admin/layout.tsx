@@ -18,21 +18,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (isLoading) return;
-
     if (!isLoggedIn) {
       router.replace("/platform/login");
       return;
     }
-
     if (!isAuthorized) {
       router.replace("/dashboard");
     }
   }, [isLoading, isLoggedIn, isAuthorized, router]);
 
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-primary z-50">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={36} className="animate-spin text-[var(--primary)]" />
+          <p className="text-sm text-muted">Vérification des accès...</p>
+        </div>
+      </div>
+    );
+  }
+
   // As with the dashboard layout, this is a fast client-side UX check.
   // The actual access control for /admin/* happens in middleware.ts, which
   // verifies the httpOnly cookie's JWT before the request ever reaches here.
-  if (isLoading || !isAuthorized) {
+  if (!isAuthorized) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-primary z-50">
         <div className="flex flex-col items-center gap-3">

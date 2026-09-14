@@ -76,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // leading-dot cookie domain — is perfectly valid there. Without this
       // fallback they'd get bounced to a login screen despite already
       // being authenticated. Ask the server, which checks the cookie.
+      setIsLoading(true);
       fetch("/api/auth/session", { credentials: "include" })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => {
@@ -89,6 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // No valid session either — genuinely logged out, nothing to do.
           })
           .finally(() => {
+            // React Strict Mode cancels the first effect before the fetch
+            // resolves — don't flip isLoading to false for that aborted run,
+            // or AdminLayout redirects before the second fetch completes.
             if (!cancelled) setIsLoading(false);
           });
     }

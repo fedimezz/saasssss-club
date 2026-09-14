@@ -40,7 +40,12 @@ interface Stats {
   todaysReservations: number;
   todaysClasses: number;
   saasPlan: SaasPlan | null;
-  clubStatus: { status: string; trialEndsAt: string | null } | null;
+  clubStatus: {
+    name: string;
+    slug: string;
+    status: string;
+    trialEndsAt: string | null;
+  } | null;
 }
 
 const ADMIN_QUICK_ACTIONS = [
@@ -81,7 +86,51 @@ function UsageBar({ label, used, limit }: { label: string; used: number; limit: 
   );
 }
 
-function SaasPlanWidget({ plan, clubStatus }: { plan: SaasPlan; clubStatus: { status: string; trialEndsAt: string | null } | null }) {
+function ClubStatusCard({
+  clubStatus,
+}: {
+  clubStatus: NonNullable<Stats["clubStatus"]>;
+}) {
+  const trialEnd = clubStatus.trialEndsAt;
+  const daysLeft = useDaysUntil(trialEnd);
+  const statusLabel: Record<string, string> = {
+    TRIAL: "Essai gratuit",
+    ACTIVE: "Actif",
+    SUSPENDED: "Suspendu",
+    CANCELLED: "Annulé",
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+      <h3 className="font-semibold text-primary">{clubStatus.name || "Mon club"}</h3>
+      <p className="text-xs text-muted font-mono">{clubStatus.slug}</p>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)]">
+          {statusLabel[clubStatus.status] ?? clubStatus.status}
+        </span>
+      </div>
+      {clubStatus.status === "TRIAL" && trialEnd !== null && daysLeft !== null && (
+        <p className="text-sm text-amber-600">
+          Essai gratuit — expire dans {daysLeft} jour{daysLeft !== 1 ? "s" : ""}
+        </p>
+      )}
+      <Link
+        href="/admin/billing"
+        className="inline-flex items-center gap-1 text-sm font-medium text-[var(--primary)] hover:underline"
+      >
+        Gérer mon abonnement <ArrowRight size={14} />
+      </Link>
+    </div>
+  );
+}
+
+function SaasPlanWidget({
+  plan,
+  clubStatus,
+}: {
+  plan: SaasPlan;
+  clubStatus: Stats["clubStatus"];
+}) {
   const isTrial = plan.status === "TRIALING";
   const trialEnd = clubStatus?.trialEndsAt ?? null;
   const daysLeft = useDaysUntil(trialEnd);
@@ -149,10 +198,10 @@ function SaasPlanWidget({ plan, clubStatus }: { plan: SaasPlan; clubStatus: { st
           {plan.priceMonthly === 0 ? "Gratuit" : `${plan.priceMonthly} ${plan.limits.currency ?? "USD"}/mois`}
         </span>
         <Link
-          href="/admin/settings"
+          href="/admin/billing"
           className="text-xs font-medium text-[var(--primary)] hover:underline"
         >
-          Gérer →
+          Gérer mon abonnement →
         </Link>
       </div>
     </div>
@@ -234,7 +283,7 @@ export default function AdminOverviewPage() {
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Demo mode banner — shown to owners when the club is on trial */}
-      {isOwner && stats.clubStatus?.status === "TRIALING" && (
+      {isOwner && stats.clubStatus?.status === "TRIAL" && (
         <DemoModeBanner trialEndsAt={stats.clubStatus.trialEndsAt ?? null} />
       )}
 
@@ -371,6 +420,7 @@ export default function AdminOverviewPage() {
         {/* SaaS plan sidebar — owner only */}
         {isOwner && (
           <div className="space-y-4">
+            {stats.clubStatus && <ClubStatusCard clubStatus={stats.clubStatus} />}
             {stats.saasPlan ? (
               <SaasPlanWidget plan={stats.saasPlan} clubStatus={stats.clubStatus} />
             ) : (

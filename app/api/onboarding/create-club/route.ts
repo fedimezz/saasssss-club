@@ -20,6 +20,10 @@ const schema = z.object({
       .regex(/^[a-z0-9-]+$/, "Slug : minuscules, chiffres, tirets uniquement")
       .refine((s) => !s.startsWith("-") && !s.endsWith("-"), "Le slug ne peut pas commencer/finir par un tiret"),
   planId: z.string().min(1, "Plan obligatoire"),
+  primaryColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+  heroTitle: z.string().trim().max(200).optional(),
+  heroSubtitle: z.string().trim().max(500).optional(),
+  address: z.string().trim().max(200).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Données invalides" }, { status: 400 });
   }
 
-  const { name, email, password, phone, clubName, slug, planId } = parsed.data;
+  const { name, email, password, phone, clubName, slug, planId, primaryColor, heroTitle, heroSubtitle, address } = parsed.data;
 
   const plan = await prisma.saasPlan.findFirst({ where: { id: planId, isActive: true }, select: { id: true } });
   if (!plan) return NextResponse.json({ error: "Plan SaaS introuvable ou inactif" }, { status: 400 });
@@ -64,7 +68,15 @@ export async function POST(request: NextRequest) {
       });
 
       await tx.gymSettings.create({
-        data: { clubId: club.id, name: clubName, primaryColor: "#6366f1", enabledPages: { home: true, schedule: true, coaches: true, pricing: true, contact: true } },
+        data: {
+          clubId: club.id,
+          name: clubName,
+          address: address || null,
+          primaryColor: primaryColor || "#6366f1",
+          heroTitle: heroTitle || null,
+          heroSubtitle: heroSubtitle || null,
+          enabledPages: { home: true, schedule: true, coaches: true, pricing: true, contact: true },
+        },
       });
 
       return { club, owner };
