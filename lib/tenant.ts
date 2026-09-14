@@ -11,6 +11,7 @@
 // platform marketing site / SUPER_ADMIN area, not any one gym's site.
 import prisma from "@/lib/prisma";
 import type { ClubStatus } from "@prisma/client";
+import { extractSlugFromHost } from "@/lib/host";
 
 export interface TenantClub {
   id: string;
@@ -29,15 +30,6 @@ export interface TenantClub {
 // (wired in Phase 7 alongside the actual suspend/reactivate endpoint).
 const cache = new Map<string, { club: TenantClub | null; expiresAt: number }>();
 const TTL_MS = 30_000;
-
-function extractSlugFromHost(host: string): string | null {
-  const hostname = host.split(":")[0].toLowerCase();
-  const parts = hostname.split(".");
-  // "yoursaas.com" (2 labels) or a bare "localhost" (1 label) -> no tenant.
-  if (parts.length <= 2) return null;
-  if (parts[0] === "www") return null;
-  return parts[0];
-}
 
 export async function resolveClubBySlug(slug: string): Promise<TenantClub | null> {
   const now = Date.now();

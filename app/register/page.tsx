@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { isTenantHost } from "@/lib/host";
 
 export default async function RegisterPage() {
-  const host = (await headers()).get("host")?.split(":")[0].toLowerCase() ?? "localhost";
-  const isTenantHost = host.split(".").length > 2 && !host.startsWith("www.");
-  redirect(isTenantHost ? "/user/register" : "/onboarding");
+  const host = (await headers()).get("host") ?? "localhost";
+  redirect(isTenantHost(host) ? "/user/register" : "/onboarding");
 }

@@ -19,6 +19,7 @@ import { verifyOrigin } from "@/lib/csrf";
 import { checkRateLimit } from "@/lib/rate-limit";
 // Note: lib/logger uses console internally — safe in Edge Runtime
 import { log } from "@/lib/logger";
+import { extractSlugFromHost } from "@/lib/host";
 
 // General write-rate-limit for authenticated API requests, applied centrally
 // (Phase 10 — "rate-limit sur toutes les routes write") rather than added
@@ -39,14 +40,6 @@ interface MiddlewareJWTPayload {
   role: string;
   name: string;
   clubId: string | null;
-}
-
-function extractSlug(host: string): string | null {
-  const hostname = host.split(":")[0].toLowerCase();
-  const parts = hostname.split(".");
-  // apex (2 labels) or bare localhost (1 label) → no tenant
-  if (parts.length <= 2 || parts[0] === "www") return null;
-  return parts[0];
 }
 
 export async function proxy(request: NextRequest) {
@@ -71,7 +64,7 @@ export async function proxy(request: NextRequest) {
 
   // ── Tenant slug — inject on every request ──────────────────────────────────
   const host = request.headers.get("host") ?? "";
-  const slug = extractSlug(host);
+  const slug = extractSlugFromHost(host);
 
   // Helper that returns a NextResponse.next() with the club slug header added.
   const nextWithSlug = (extraHeaders?: Record<string, string>) => {
