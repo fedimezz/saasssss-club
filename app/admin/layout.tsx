@@ -19,7 +19,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (isLoading) return;
     if (!isLoggedIn) {
-      router.replace("/platform/login");
+      // Send unauthenticated users to the member/club login, NOT to the
+      // platform super-admin login. /platform/login is only for SUPER_ADMIN.
+      router.replace("/user/login");
       return;
     }
     if (!isAuthorized) {
@@ -39,7 +41,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // As with the dashboard layout, this is a fast client-side UX check.
-  // The actual access control for /admin/* happens in middleware.ts, which
+  // The actual access control for /admin/* happens in proxy.ts, which
   // verifies the httpOnly cookie's JWT before the request ever reaches here.
   if (!isAuthorized) {
     return (

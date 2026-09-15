@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     httpOnly: true,
     secure: baseUrl.startsWith("https://"),
     sameSite: "lax",
-    path: "/api/auth",
+    path: "/",
     maxAge: 60 * 5,
   });
   return response;

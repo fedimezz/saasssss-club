@@ -7,6 +7,10 @@ export async function GET(request: NextRequest) {
     const auth = await requireAdmin(request);
     if (!auth.ok) return NextResponse.json({ error: "Accès refusé" }, { status: auth.status });
 
+    // Every log query MUST be scoped to the club's ID — never leak cross-tenant data.
+    const clubId = auth.user.clubId;
+    if (!clubId) return NextResponse.json({ error: "Club introuvable" }, { status: 400 });
+
     const { searchParams } = new URL(request.url);
 
     const page      = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
@@ -20,7 +24,7 @@ export async function GET(request: NextRequest) {
     const exportAll = searchParams.get("export") === "1";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
+    const where: any = { clubId }; // ← always scoped to this club
     if (category)  where.category  = category;
     if (actorRole) where.actorRole = actorRole;
     if (from || to) {
@@ -59,10 +63,14 @@ export async function GET(request: NextRequest) {
     // Quick stats for the summary bar
     const [totalToday, byCategory] = await Promise.all([
       prisma.activityLog.count({
-        where: { createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+        where: {
+          clubId,
+          createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+        },
       }),
       prisma.activityLog.groupBy({
         by: ["category"],
+        where: { clubId },
         _count: { _all: true },
         orderBy: { _count: { category: "desc" } },
       }),
@@ -89,12 +97,15 @@ export async function DELETE(request: NextRequest) {
     const auth = await requireOwner(request);
     if (!auth.ok) return NextResponse.json({ error: "Accès réservé au propriétaire" }, { status: auth.status });
 
+    const clubId = auth.user.clubId;
+    if (!clubId) return NextResponse.json({ error: "Club introuvable" }, { status: 400 });
+
     const { days } = await request.json().catch(() => ({ days: 90 }));
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - Math.max(1, Number(days)));
 
     const { count } = await prisma.activityLog.deleteMany({
-      where: { createdAt: { lt: cutoff } },
+      where: { clubId, createdAt: { lt: cutoff } },
     });
 
     const { logAction } = await import("@/lib/activity-log");

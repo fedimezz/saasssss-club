@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const loginUrl = (error: string) => `${baseUrl}/user/login?error=${encodeURIComponent(error)}`;
 
   const clearStateCookie = (response: NextResponse) => {
-    response.cookies.set("google_oauth_state", "", { path: "/api/auth", maxAge: 0 });
+    response.cookies.set("google_oauth_state", "", { path: "/", maxAge: 0 });
     return response;
   };
 

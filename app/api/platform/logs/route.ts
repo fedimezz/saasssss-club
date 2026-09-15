@@ -12,15 +12,25 @@ export async function GET(request: NextRequest) {
     if (!auth.ok) return NextResponse.json({ error: "Accès réservé à la plateforme" }, { status: auth.status });
 
     const { searchParams } = new URL(request.url);
-    const category = searchParams.get("category");
-    const page = Math.max(1, Number(searchParams.get("page")) || 1);
-    const limit = 30;
+    const category = searchParams.get("category") || undefined;
+    const search   = searchParams.get("search")?.trim() || undefined;
+    const page     = Math.max(1, Number(searchParams.get("page")) || 1);
+    const limit    = 30;
 
     const where: Prisma.ActivityLogWhereInput = {
       ...(category ? { category } : {}),
+      ...(search
+        ? {
+            OR: [
+              { action:     { contains: search, mode: "insensitive" } },
+              { actorName:  { contains: search, mode: "insensitive" } },
+              { targetName: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
     };
 
-    const [logs, total] = await Promise.all([
+    const [logs, total, totalToday] = await Promise.all([
       prisma.activityLog.findMany({
         where,
         include: { club: { select: { name: true, slug: true } } },
@@ -29,10 +39,14 @@ export async function GET(request: NextRequest) {
         take: limit,
       }),
       prisma.activityLog.count({ where }),
+      prisma.activityLog.count({
+        where: { createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+      }),
     ]);
 
     return NextResponse.json({
       logs,
+      totalToday,
       pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
   } catch (error) {

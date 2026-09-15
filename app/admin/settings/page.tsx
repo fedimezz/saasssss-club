@@ -90,7 +90,6 @@ export default function GymSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingHero, setUploadingHero] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("identity");
   const [clubInfo, setClubInfo] = useState<{ slug: string; publicUrl: string; customDomain: string | null } | null>(null);
   // Shown once right after /onboarding creates the club and drops the
@@ -105,7 +104,6 @@ export default function GymSettingsPage() {
     }
   }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const heroFileInputRef = useRef<HTMLInputElement>(null);
 
   // ── System tab state ──
   interface SystemHealth {
@@ -232,26 +230,6 @@ export default function GymSettingsPage() {
     }
   };
 
-  const handleHeroImageSelect = async (file: File | undefined | null) => {
-    if (!file || !settings) return;
-    setUploadingHero(true);
-    setError(null);
-    try {
-      const body = new FormData();
-      body.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", credentials: "include", body });
-      const json = await res.json();
-      if (res.ok) {
-        set("heroImageUrl", json.url);
-      } else {
-        setError(json.error || "Échec du téléversement de la photo");
-      }
-    } catch {
-      setError("Erreur réseau lors du téléversement");
-    } finally {
-      setUploadingHero(false);
-    }
-  };
 
   const handleSave = async () => {
     if (!settings) return;
@@ -535,53 +513,14 @@ export default function GymSettingsPage() {
                 {activeTab === "homepage" && (
                     <div className="bg-card border border-border rounded-2xl p-6">
                       <div className="flex items-center gap-2 mb-1">
-                        <ImageIcon size={18} className="text-[var(--primary)]" />
+                        <Type size={18} className="text-[var(--primary)]" />
                         <h2 className="font-semibold text-primary">Page d&apos;accueil</h2>
                       </div>
-                      <p className="text-xs text-muted mb-4">
-                        Photo et texte affichés en haut de la page d&apos;accueil. Sans photo, l&apos;animation 3D par défaut est utilisée.
+                      <p className="text-xs text-muted mb-6">
+                        Texte affiché en haut de la page d&apos;accueil publique de votre club.
                       </p>
 
-                      <div className="flex items-center gap-4 mb-5">
-                        <div className="w-28 h-16 rounded-xl bg-muted/30 border border-border flex items-center justify-center overflow-hidden flex-shrink-0">
-                          {settings.heroImageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={settings.heroImageUrl} alt="Photo d'accueil" className="w-full h-full object-cover" />
-                          ) : (
-                              <ImageIcon size={20} className="text-muted" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                              onClick={() => heroFileInputRef.current?.click()}
-                              disabled={uploadingHero}
-                              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border text-sm font-medium text-primary hover:bg-muted/30 disabled:opacity-60"
-                          >
-                            {uploadingHero ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                            {uploadingHero ? "Envoi…" : settings.heroImageUrl ? "Changer la photo" : "Ajouter une photo"}
-                          </button>
-                          {settings.heroImageUrl && (
-                              <button
-                                  onClick={() => set("heroImageUrl", null)}
-                                  className="text-xs text-muted hover:text-danger px-2"
-                              >
-                                Retirer
-                              </button>
-                          )}
-                          <input
-                              ref={heroFileInputRef}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                handleHeroImageSelect(e.target.files?.[0]);
-                                e.target.value = "";
-                              }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-4">
                         <div>
                           <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide flex items-center gap-1">
                             <Type size={11} /> Titre principal
@@ -593,6 +532,7 @@ export default function GymSettingsPage() {
                               placeholder={settings.name}
                               className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40"
                           />
+                          <p className="text-[11px] text-muted mt-1">Laissez vide pour utiliser le nom du club par défaut.</p>
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">Sous-titre</label>

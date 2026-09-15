@@ -67,13 +67,19 @@ export async function proxy(request: NextRequest) {
   const slug = extractSlugFromHost(host);
 
   // Helper that returns a NextResponse.next() with the club slug header added.
+  // For OAuth callback routes we intentionally skip the dev URL rewrite:
+  // NextResponse.rewrite() in Edge Runtime can drop cookies that were set
+  // on the initiating response (the google_oauth_state CSRF cookie), causing
+  // a state mismatch. Header injection is sufficient — the route handler reads
+  // x-club-slug via resolveTenantFromRequest(), same as production.
+  const isOAuthCallback = pathname.startsWith("/api/auth/callback/");
   const nextWithSlug = (extraHeaders?: Record<string, string>) => {
     const headers = new Headers(request.headers);
     if (slug) headers.set("x-club-slug", slug);
     if (extraHeaders) {
       for (const [k, v] of Object.entries(extraHeaders)) headers.set(k, v);
     }
-    if (slug && process.env.NODE_ENV !== "production") {
+    if (slug && process.env.NODE_ENV !== "production" && !isOAuthCallback) {
       const rewrittenUrl = request.nextUrl.clone();
       rewrittenUrl.searchParams.set("club", slug);
       return NextResponse.rewrite(rewrittenUrl, { request: { headers } });
@@ -116,7 +122,7 @@ export async function proxy(request: NextRequest) {
     log.warn("proxy_401_unauthenticated", { path: request.nextUrl.pathname });
     if (isApiRoute) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     const loginUrl = new URL(
-      pathname.startsWith("/admin") ? "/platform/login" : "/user/login",
+      "/user/login",
       request.url
     );
     loginUrl.searchParams.set("redirect", pathname);

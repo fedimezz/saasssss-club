@@ -58,7 +58,14 @@ function MemberLoginForm() {
     if (!isLoggedIn || !userRole) return;
     const role = userRole.toUpperCase();
     if (role === "ADMIN" || role === "OWNER") {
-      router.replace("/admin");
+      // On a club subdomain → club admin panel. On bare localhost →
+      // the member login is the wrong place for an owner; redirect back
+      // to the platform root so they can navigate correctly.
+      const isClubSubdomain = typeof window !== "undefined" &&
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1" &&
+        !window.location.hostname.startsWith("www.");
+      router.replace(isClubSubdomain ? "/admin" : "/");
     } else {
       router.replace("/dashboard");
     }
@@ -97,7 +104,18 @@ function MemberLoginForm() {
       login(data.user.role, data.user);
 
       const role = String(data.user.role).toUpperCase();
-      window.location.href = role === "ADMIN" || role === "OWNER" ? "/admin" : "/dashboard";
+      if (role === "ADMIN" || role === "OWNER") {
+        // Only redirect to /admin when on a club subdomain. On bare localhost
+        // (no club context) the member login shouldn't handle owner logins —
+        // send them to / so the platform landing is shown.
+        const isClubSubdomain =
+          window.location.hostname !== "localhost" &&
+          window.location.hostname !== "127.0.0.1" &&
+          !window.location.hostname.startsWith("www.");
+        window.location.href = isClubSubdomain ? "/admin" : "/";
+      } else {
+        window.location.href = "/dashboard";
+      }
     } catch {
       setError("Erreur de connexion au serveur.");
       setLoading(false);
