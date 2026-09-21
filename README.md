@@ -21,7 +21,9 @@ A full-stack, multi-tenant SaaS platform for sports club management. Each gym ge
 11. [Project Status — Phases 0–12](#project-status--phases-012)
 12. [Setup & Environment Variables](#setup--environment-variables)
 13. [Deployment (Vercel)](#deployment-vercel)
-14. [Key Files Reference](#key-files-reference)
+14. [Platform Admin — Club Management](#platform-admin--club-management)
+15. [Production Checklist](#production-checklist)
+16. [Key Files Reference](#key-files-reference)
 
 ---
 
@@ -121,8 +123,7 @@ Granular RBAC is in `lib/permissions.ts`. Custom overrides stored in `role_permi
 - **Billing** — SaaS subscription status, trial countdown, upgrade CTA
 
 ### Platform (Super Admin) `/platform`
-- Clubs list with status (ACTIVE / TRIAL / SUSPENDED)
-- Per-club detail: suspend, activate, change SaaS plan
+- **Clubs — full CRUD** (`/platform/clubs`, see [Platform Admin](#platform-admin--club-management)): create, search/filter/sort, edit, suspend / activate / ban, change plan, extend trial, reset owner password, delete
 - Platform-wide activity logs
 - SaaS plan management
 - System health overview
@@ -137,8 +138,9 @@ Granular RBAC is in `lib/permissions.ts`. Custom overrides stored in `role_permi
 - 3-step wizard: account → club info → plan selection
 - Atomic transaction: Club + OWNER User + ClubSubscription (TRIALING) + GymSettings
 - 14-day trial auto-configured
-- Auto-login after creation (JWT cookie set)
-- Rate-limited (5 clubs per IP per hour)
+- Auto-login after creation (session handed to the club subdomain through `/api/auth/bridge`)
+- Rate-limited (5 clubs per IP per hour); slug availability check is rate-limited too (40/min per IP)
+- Reserved subdomains (`www`, `api`, `admin`, `mail`, …) are refused — see `lib/slug.ts`
 
 ---
 
@@ -184,16 +186,17 @@ All routes are under `/api/`. Every route is clubId-scoped via `requireX()` guar
 |---|---|---|---|
 | POST | `/api/auth/login` | Public | Email + password login |
 | POST | `/api/auth/register` | Public | Member self-registration |
-| POST | `/api/auth/logout` | Any | Clear JWT cookie |
+| POST | `/api/auth/logout` | Any | Clear the session cookie (host-only + legacy `Domain=` variants) |
 | GET | `/api/auth/me` | Any | Current user info |
-| GET | `/api/auth/google` | Public | OAuth redirect |
-| GET | `/api/auth/callback/google` | Public | OAuth callback |
+| GET | `/api/auth/google` | Public | OAuth redirect — **501 unless `GOOGLE_AUTH_ENABLED=1`** |
+| GET | `/api/auth/callback/google` | Public | OAuth callback — same flag |
 | POST | `/api/auth/request-otp` | Public | Phone OTP request |
 | POST | `/api/auth/verify-otp` | Public | OTP verification |
 
 ### Onboarding
 | Method | Path | Auth | Description |
 |---|---|---|---|
+| GET | `/api/onboarding/check-slug?slug=` | Public | Slug availability (rate-limited, reserved slugs refused) |
 | POST | `/api/onboarding/create-club` | Public | Atomic club creation |
 
 ### Admin — Members
@@ -255,8 +258,13 @@ All routes are under `/api/`. Every route is clubId-scoped via `requireX()` guar
 ### Platform (Super Admin)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/platform/clubs` | SUPER_ADMIN | All clubs list |
-| GET/POST | `/api/platform/clubs/[id]` | SUPER_ADMIN | Club detail + actions |
+| GET | `/api/platform/clubs` | SUPER_ADMIN | List — `?search=&status=&plan=&sort=createdAt\|name\|status&order=&page=&limit=` (+ status counts) |
+| POST | `/api/platform/clubs` | SUPER_ADMIN | Create club + OWNER + trial subscription + settings |
+| GET | `/api/platform/clubs/[id]` | SUPER_ADMIN | Detail: owner, subscription, usage counts, role breakdown, last SaaS payments |
+| PUT | `/api/platform/clubs/[id]` | SUPER_ADMIN | Edit `name`, `slug`, `customDomain`, `owner{name,email,phone}` |
+| PATCH | `/api/platform/clubs/[id]` | SUPER_ADMIN | Actions: `suspend`, `activate`, `ban`, `change_plan`, `extend_trial`, `reset_owner_password` |
+| DELETE | `/api/platform/clubs/[id]` | SUPER_ADMIN | Permanent delete — body `{ "confirmSlug": "<slug>" }` required |
+| GET | `/api/platform/plans` | SUPER_ADMIN | SaaS plan catalog |
 | GET | `/api/platform/logs` | SUPER_ADMIN | Platform-wide audit logs |
 | GET | `/api/platform/system` | SUPER_ADMIN | System health |
 
@@ -277,14 +285,20 @@ All routes are under `/api/`. Every route is clubId-scoped via `requireX()` guar
 1. User POSTs /api/auth/login {email, password}
 2. Server: bcrypt.compare → fetch user from DB (with clubId)
 3. generateToken({ id, email, role, name, clubId }) → signed JWT (7 days)
-4. Response: Set-Cookie: token=<JWT>; HttpOnly; SameSite=Lax; Secure (CSRF covered by the Origin check in proxy.ts)
+4. Response: Set-Cookie: token=<JWT>; HttpOnly; SameSite=Lax; Secure — HOST-ONLY (no Domain attribute), so a session on
+   gym-a.yoursaas.com is never sent to gym-b.yoursaas.com and a SUPER_ADMIN session on the apex is never sent to any club.
+   (CSRF covered by the Origin check in proxy.ts)
 5. Subsequent requests: proxy.ts reads cookie → verifyToken() → JWTPayload
 6. requireX(request): re-fetches user from DB to get current role/clubId
    (JWT value is NOT trusted for DB scoping — DB is the source of truth)
 7. Every Prisma query: WHERE clubId = <DB-verified clubId>
 ```
 
-**Google OAuth:** `/api/auth/google` → Google → `/api/auth/callback/google` → creates/finds user → same JWT cookie flow.
+**Cross-host hand-off:** onboarding runs on the apex; `/api/auth/bridge` sets a fresh cookie on the club's own host.
+
+**Password policy:** 8+ characters, not in the common-password list, not digits-only, not repetitive (`passwordSchema` in `lib/validation.ts`).
+
+**Google OAuth (disabled by default):** `/api/auth/google` → Google → `/api/auth/callback/google` → same cookie flow. The callback runs on the apex host, so it cannot yet hand a session to a club subdomain. It is off unless `GOOGLE_AUTH_ENABLED=1` (server) and `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=1` (shows the button).
 
 ---
 
@@ -350,7 +364,7 @@ getFullUsage(clubId)                // → { usage: {}, limits: {} }
 # Run the whole suite
 npx vitest run
 
-# Run only new Phase 11 tests
+# Run only the API suites
 npx vitest run app/api/__tests__/
 
 # Run specific suite
@@ -370,8 +384,11 @@ npx vitest run app/api/__tests__/tenant-isolation.test.ts
 | **Plan limits** | `app/api/__tests__/plan-limits.test.ts` | 402 on limit hit, 201 below |
 | **Webhook idempotency** | `app/api/__tests__/webhook-idempotency.test.ts` | No double-write on repeat call |
 | **Onboarding E2E** | `app/api/__tests__/onboarding-e2e.test.ts` | Full club creation flow |
+| **Platform club CRUD** | `app/api/__tests__/platform-clubs.test.ts` | Access control, CSRF, validation, conflicts, lifecycle actions, delete guard + order |
+| Platform helpers | `lib/__tests__/platform-clubs-lib.test.ts` | Slug rules, custom domains, trial maths, sort whitelist |
+| Host parsing | `lib/__tests__/host.test.ts` | localhost, `*.localhost`, apex, multi-label apex (`gymos.com.tn`) |
 
-All tests mock Prisma at module level — no live DB required.
+All tests mock Prisma at module level — no live DB required. The club-delete order was additionally verified against a real PostgreSQL 16 with the tracked migrations applied.
 
 ---
 
@@ -389,6 +406,7 @@ All tests mock Prisma at module level — no live DB required.
 | 10 | Security + Performance | ✅ CSRF + rate limit (proxy) + indexes + logger |
 | 11 | Tests | ✅ Tenant isolation + plan limits + webhook + onboarding |
 | 12 | Production Readiness | ✅ /api/health + vercel.json + .env.example (Sentry: config stubs only — `@sentry/nextjs` not installed yet) |
+| 13 | Platform club CRUD + production pass | ✅ Full `/platform/clubs` CRUD, host-only cookies + working logout, apex-aware tenant detection, reserved slugs, password policy, Google sign-in gated, 404 / robots / sitemap |
 
 ### Known Tech Debt
 
@@ -398,6 +416,9 @@ All tests mock Prisma at module level — no live DB required.
 | 2 | `lib/auth-server.ts` may duplicate `lib/auth.ts` — audit and remove | Low |
 | 3 | `app/login/page.tsx` duplicates `app/user/login/page.tsx` — consolidate | Low |
 | 4 | `coaching/page.tsx` and `activites/*` are static — not yet connected to DB | Low |
+| 7 | Google sign-in for club subdomains needs a bridge-style hand-off before `GOOGLE_AUTH_ENABLED` can be turned on | Medium |
+| 8 | Deleting a club does not remove its Cloudinary assets | Low |
+| 9 | Only the apex has a `sitemap.xml`; club subdomains have none | Low |
 | 5 | Sentry is not wired: `sentry.*.config.ts` are empty stubs and `@sentry/nextjs` isn't a dependency | Medium |
 | 6 | Removed: SSE now uses Upstash Redis pub/sub (`lib/sse.ts`) with in-memory fallback when Redis isn't configured | — |
 
@@ -437,7 +458,7 @@ Useful scripts: `npm run validate` (lint + typecheck + tests), `npm run db:studi
 |---|---|---|
 | `DATABASE_URL` | ✅ | PostgreSQL connection (Prisma runtime) |
 | `DIRECT_URL` | ✅ | Direct connection for migrations (bypasses PgBouncer) |
-| `APP_URL` | ✅ | Platform base URL, no trailing slash |
+| `APP_URL` | ✅ | Platform base URL, no trailing slash. **Also defines the apex for tenant detection** (`club.<apex>` = tenant), so multi-label apexes like `gymos.com.tn` work |
 | `NEXT_PUBLIC_APP_URL` | ✅ | Same, exposed to browser |
 | `JWT_SECRET` | ✅ | Min 32 chars. `openssl rand -base64 32` |
 | `UPSTASH_REDIS_REST_URL` | ✅ | Upstash Redis URL |
@@ -445,6 +466,8 @@ Useful scripts: `npm run validate` (lint + typecheck + tests), `npm run db:studi
 | `CLOUDINARY_CLOUD_NAME` | ✅ | Image upload |
 | `CLOUDINARY_API_KEY` | ✅ | |
 | `CLOUDINARY_API_SECRET` | ✅ | |
+| `GOOGLE_AUTH_ENABLED` | Optional | `1` enables the Google OAuth routes (default off) |
+| `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED` | Optional | `1` shows the “Continuer avec Google” button (default hidden) |
 | `GOOGLE_CLIENT_ID` | Optional | OAuth |
 | `GOOGLE_CLIENT_SECRET` | Optional | |
 | `GOOGLE_REDIRECT_URI` | Optional | |
@@ -460,7 +483,7 @@ Useful scripts: `npm run validate` (lint + typecheck + tests), `npm run db:studi
 | `SENTRY_DSN` | Optional | Error monitoring (server) |
 | `NEXT_PUBLIC_SENTRY_DSN` | Optional | Error monitoring (browser) |
 | `DEV_DEFAULT_CLUB_SLUG` | Dev only | Leave unset. Makes plain `localhost` act as one gym, which breaks the super-admin login |
-| `COOKIE_DOMAIN` | Optional | Leave empty (cookie scoped to the exact host). Only set to share a session across subdomains |
+| `COOKIE_DOMAIN` | Optional | Leave empty: the session cookie is host-only (safest for multi-tenant). Setting it shares one session across subdomains and weakens tenant separation |
 | `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` | Prod seed | Bootstraps the platform SUPER_ADMIN when running the seed with `NODE_ENV=production` (password 12+ chars) |
 | `JSON_LOGS` | Optional | Force JSON log output in dev (`1` = enable) |
 | `DEBUG` | Optional | Enable debug logs in production (`1` = enable) |
@@ -506,19 +529,73 @@ Required Vercel env vars before the first deploy: `DATABASE_URL`, `DIRECT_URL`, 
 
 ---
 
+## Platform Admin — Club Management
+
+`/platform/clubs` (SUPER_ADMIN only — sign in at `/platform/login` on the apex domain).
+
+| Action | Where | What it does |
+|---|---|---|
+| **Create** | “Nouveau club” | Atomic: `Club` (TRIAL) + OWNER user + `ClubSubscription` (TRIALING) + `GymSettings` with default pages. Slug auto-filled from the name, plan picker, trial 1–90 days, optional custom domain. The generated owner password is displayed **once**. |
+| **Read** | List + detail | Search (name, slug, domain, owner email), filter by status / plan, sort, paginate; detail shows owner, subscription, usage counts, role breakdown, last SaaS payments. |
+| **Update** | Detail → “Modifier” | Name, slug, custom domain, owner name / email / phone. Renaming keeps the public site name in sync when it was still the club name. Changing the slug changes the club URL (users must sign in again on the new host). |
+| **Suspend / Activate** | List or detail | Blocks / restores login for every user of the club. No data touched. |
+| **Ban** | Detail → danger zone | Status `CANCELLED` + subscription cancelled. Reversible with “Réactiver”. |
+| **Change plan** | Detail → “Changer de plan” | Creates the subscription row if the club has none. |
+| **Extend trial** | Detail | Adds days on top of the remaining trial; also reactivates a club the cron suspended for an expired trial. Refused for paying clubs. |
+| **Reset owner password** | Detail | Sets a new password (policy enforced); tokens for password-reset emails are cleared. Existing sessions stay valid until they expire (JWT). |
+| **Delete** | List or detail | Permanent. The UI requires typing the slug **and** the API rejects the call unless `confirmSlug` matches. |
+
+**Why delete is not a plain `club.delete()`:** `User.clubId` is `onDelete: Restrict` and `Subscription.planId → MembershipPlan` is Restrict too, so a bare delete fails as soon as a club has one user. `deleteClubCascade()` removes member subscriptions → users → club in one transaction; everything else cascades from `Club`. Delete audit entries are written with `clubId = null` so they survive the club’s own log rows.
+
+**Safety rules**
+- Every mutation checks the `Origin` header (CSRF) and `requireSuperAdmin`.
+- Slugs: 3–40 chars, `[a-z0-9-]`, no leading / trailing / double hyphen, and never a reserved name (`www`, `api`, `admin`, `platform`, `mail`, …).
+- Custom domains are normalised (`https://WWW.MonGym.tn/` → `www.mongym.tn`) and can never equal or sit under the platform domain.
+- Unique-index races (slug / email / domain) return `409` with a `field`, not `500`.
+- Every action is written to the activity log (`PLATFORM_CLUB_CREATED | UPDATED | SUSPENDED | ACTIVATED | BANNED | PLAN_CHANGED | TRIAL_EXTENDED | OWNER_PASSWORD_RESET | DELETED`). Passwords are never logged.
+
+---
+
+## Production Checklist
+
+**Before the first deploy**
+- [ ] `APP_URL` / `NEXT_PUBLIC_APP_URL` set to the real apex (tenant detection depends on it)
+- [ ] `JWT_SECRET` (32+ chars) and `CRON_SECRET` (16+ chars) set; `COOKIE_DOMAIN` left **empty**
+- [ ] Wildcard domain `*.yourdomain` added in Vercel + DNS `CNAME *` → `cname.vercel-dns.com`
+- [ ] `npx prisma migrate deploy` run against the production DB (never `db push` / `migrate dev`)
+- [ ] `NODE_ENV=production npx prisma db seed` with `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` to create plans + platform admin
+- [ ] Upstash Redis, Brevo (`BREVO_API_KEY`, `SMTP_FROM`), Cloudinary, Konnect variables set
+- [ ] `GOOGLE_AUTH_ENABLED` and `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED` left unset (see tech debt #7)
+
+**After deploy**
+- [ ] `GET /api/health` → `{ "status": "ok" }`
+- [ ] Sign in at `https://yourdomain/platform/login`, create a test club from `/platform/clubs`
+- [ ] Open `https://<slug>.yourdomain`, sign in as the owner, **log out and confirm you are really logged out** (reload the page)
+- [ ] Confirm the SUPER_ADMIN session is *not* present on a club subdomain
+- [ ] Run a Konnect sandbox payment; check the first Vercel Cron runs
+- [ ] Delete the test club from `/platform/clubs`
+
+**CI gate (already in `.github/workflows/ci.yml`):** `npm run validate` = ESLint + `tsc --noEmit` + Vitest.
+
+---
+
 ## Key Files Reference
 
 ```
 prisma/
   schema.prisma          Full schema — 824 lines, 19 models
   seed.ts                Demo seed: SaaS plans + 2 clubs + members + sessions
-  migrations/            5 migration files (init → perf indexes)
+  migrations/            6 migration files (init → SaaS billing)
 
 lib/
   auth.ts                generateToken, verifyToken, requireX() guards, AuthResult type
   tenant.ts              resolveTenantFromRequest() — subdomain → clubId
   plan-limits.ts         checkLimit(), checkFeature(), getFullUsage()
   guards.ts              assertClubId() — type-narrows string|null → string
+  slug.ts                Club slug rules + RESERVED_SLUGS (www, api, admin, …)
+  platform-clubs.ts      Super-admin club CRUD: Zod schemas, provisionClub(), deleteClubCascade(), custom-domain rules
+  platform-client.ts     Browser helpers for /platform (apiRequest, formatters, password generator)
+  host.ts                Host header → tenant slug (apex-aware via APP_URL)
   logger.ts              Structured JSON logger, zero deps, PII-safe
   permissions.ts         Granular RBAC permission matrix
   rate-limit.ts          Upstash Redis sliding window rate limiter
@@ -527,6 +604,11 @@ lib/
   validation.ts          Shared Zod schemas
   csrf.ts                Origin verification for state-mutating requests
   payments/konnect.ts    Konnect API client (initiate, verify, webhook)
+
+components/platform/       ConfirmDialog (typed confirmation), CreateClubModal
+app/platform/clubs/      Club list + club detail/edit/danger zone
+app/not-found.tsx        404 page
+app/robots.ts · sitemap.ts   robots.txt / sitemap.xml (apex)
 
 proxy.ts                 Edge middleware — slug injection + JWT + roles + rate limit + CSRF + logging
 
