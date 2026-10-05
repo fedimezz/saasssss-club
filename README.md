@@ -1,6 +1,6 @@
 # Le Club de Gammarth — SaaS Multi-Tenant Platform
 
-> **Stack:** Next.js 16 · TypeScript · Prisma 5 · PostgreSQL · Tailwind CSS v4 · JWT · Upstash Redis · Cloudinary · Konnect · Brevo (email) · Twilio
+> **Stack:** Next.js 16 · TypeScript · Prisma 5 · PostgreSQL · Tailwind CSS v4 · JWT · Upstash Redis · Cloudinary · Konnect · Resend (email) · TextBee (SMS)
 
 A full-stack, multi-tenant SaaS platform for sports club management. Each gym gets its own subdomain (`slug.yoursaas.com`), isolated data, custom branding, and a self-service billing flow.
 
@@ -58,7 +58,7 @@ API Routes (/app/api/**)
   ▼
 Prisma 5 → PostgreSQL
 Cloudinary (images) · Upstash Redis (rate limit) · Konnect (payments)
-Brevo (email) · Twilio (SMS)
+Resend (email) · TextBee (SMS)
 ```
 
 ---
@@ -448,7 +448,7 @@ npm run dev
 
 Open `http://club-a.localhost:3000` (gym A), `http://club-b.localhost:3000` (gym B) or `http://localhost:3000` (platform: landing, onboarding, `/platform/login`).
 Demo logins: `owner.a@demo.local`, `admin.a@demo.local`, `coach.a@demo.local`, `member.a@demo.local`, `owner.b@demo.local`, `superadmin@platform.local` — all `Demo123!`.
-Redis (Upstash), Brevo, Cloudinary and Konnect are optional locally: rate limiting falls back to in-memory and emails are printed to the terminal.
+Redis (Upstash), Resend, TextBee, Cloudinary and Konnect can be omitted locally; email/SMS delivery then reports an unavailable provider without printing message contents or verification codes.
 
 Useful scripts: `npm run validate` (lint + typecheck + tests), `npm run db:studio`, `npm run db:migrate:dev` (create a new migration).
 
@@ -474,11 +474,13 @@ Useful scripts: `npm run validate` (lint + typecheck + tests), `npm run db:studi
 | `KONNECT_API_KEY` | ✅ | Payment gateway |
 | `KONNECT_BASE_URL` | ✅ | |
 | `KONNECT_WALLET_ID` | ✅ | |
-| `BREVO_API_KEY` | ✅ prod | Transactional email via Brevo REST API (dev: emails are printed to the console if empty) |
-| `SMTP_FROM` | ✅ | Verified sender address in Brevo |
-| `TWILIO_ACCOUNT_SID` | Optional | SMS |
-| `TWILIO_AUTH_TOKEN` | Optional | |
-| `TWILIO_FROM_NUMBER` | Optional | |
+| `RESEND_API_KEY` | ✅ prod | Resend transactional email API key |
+| `RESEND_FROM` | ✅ prod | Sender address on a verified Resend domain |
+| `TEXTBEE_API_KEY` | Optional | TextBee SMS API key; required in production when SMS verification is enabled |
+| `TEXTBEE_DEVICE_ID` | Optional | Paired Android device ID; omit to use TextBee's default enabled device |
+| `TEXTBEE_BASE_URL` | Optional | TextBee API base URL; defaults to `https://api.textbee.dev/api/v1` |
+| `SMS_VERIFICATION_ENABLED` | Optional | Set `true` to send verification codes by SMS in addition to email |
+| `SMS_ALLOWED_COUNTRY_CODES` | Optional | SMS destination allow-list; defaults to `+216` |
 | `CRON_SECRET` | ✅ | Auth header for Vercel Cron jobs (min 16 chars; unset ⇒ all cron calls rejected) |
 | `SENTRY_DSN` | Optional | Error monitoring (server) |
 | `NEXT_PUBLIC_SENTRY_DSN` | Optional | Error monitoring (browser) |
@@ -513,7 +515,7 @@ npx prisma migrate deploy                                            # apply tra
 NODE_ENV=production SUPER_ADMIN_EMAIL="you@yourdomain.com" SUPER_ADMIN_PASSWORD="a-long-unique-password" npx prisma db seed
 ```
 
-Required Vercel env vars before the first deploy: `DATABASE_URL`, `DIRECT_URL`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `JWT_SECRET` (32+ chars), `CRON_SECRET` (16+ chars), `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `BREVO_API_KEY`, `SMTP_FROM`, `CLOUDINARY_*`, `KONNECT_*`.
+Required Vercel env vars before the first deploy: `DATABASE_URL`, `DIRECT_URL`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `JWT_SECRET` (32+ chars), `CRON_SECRET` (16+ chars), `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `RESEND_API_KEY`, `RESEND_FROM`, `CLOUDINARY_*`, `KONNECT_*`.
 
 **Wildcard domain setup:**
 1. Vercel Dashboard → Project → Settings → Domains
@@ -564,7 +566,7 @@ Required Vercel env vars before the first deploy: `DATABASE_URL`, `DIRECT_URL`, 
 - [ ] Wildcard domain `*.yourdomain` added in Vercel + DNS `CNAME *` → `cname.vercel-dns.com`
 - [ ] `npx prisma migrate deploy` run against the production DB (never `db push` / `migrate dev`)
 - [ ] `NODE_ENV=production npx prisma db seed` with `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` to create plans + platform admin
-- [ ] Upstash Redis, Brevo (`BREVO_API_KEY`, `SMTP_FROM`), Cloudinary, Konnect variables set
+- [ ] Upstash Redis, Resend (`RESEND_API_KEY`, `RESEND_FROM`), Cloudinary, Konnect variables set
 - [ ] `GOOGLE_AUTH_ENABLED` and `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED` left unset (see tech debt #7)
 
 **After deploy**

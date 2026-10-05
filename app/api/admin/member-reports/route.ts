@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         user: { select: { id: true, name: true, email: true, phone: true } },
       },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      take: 200,
     });
 
     const counts = await prisma.memberReport.groupBy({

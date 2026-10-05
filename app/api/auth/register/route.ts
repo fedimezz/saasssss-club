@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomInt } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { hashPassword } from "@/lib/bcrypt";
 import { resolveTenantFromRequest, isClubUsable } from "@/lib/tenant";
 import { checkLimit } from "@/lib/plan-limits";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { hashSecret, minutesFromNow } from "@/lib/otp";
+import { generateVerificationCode, hashSecret, minutesFromNow } from "@/lib/otp";
+import { sendEmail, verificationCodeEmail } from "@/lib/email";
 import { sendSms, verificationCodeSms } from "@/lib/sms";
 import { runAfter } from "@/lib/after";
 import {
@@ -120,9 +122,7 @@ export async function POST(request: NextRequest) {
                     },
                 });
 
-                const cardNumber = `LCG${Date.now()}${Math.floor(
-                    Math.random() * 1000
-                )}`;
+                const cardNumber = `LCG${Date.now()}${randomInt(0, 1000)}`;
 
                 const expiresAt = new Date();
 
@@ -144,13 +144,7 @@ export async function POST(request: NextRequest) {
             }
         );
 
-        // ============================================================
-        // TEMPORARY DEVELOPMENT VERIFICATION
-        // Brevo is disabled.
-        // The verification code is always 123456.
-        // ============================================================
-
-        const verificationCode = "123456";
+        const verificationCode = generateVerificationCode();
 
         await prisma.user.update({
             where: {
@@ -162,33 +156,8 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        console.log("================================");
-        console.log("TEMP VERIFICATION CODE: 123456");
-        console.log("EMAIL:", user.email);
-        console.log("EXPIRES IN: 15 MINUTES");
-        console.log("BREVO: DISABLED");
-        console.log("================================");
-
-        // ============================================================
-        // BREVO TEMPORARILY DISABLED
-        // Re-enable this later when the Brevo IP is authorized.
-        // ============================================================
-
-        /*
-        const { subject, html } =
-          verificationCodeEmail(verificationCode);
-
-        await sendEmail({
-          to: user.email,
-          subject,
-          html,
-        }).catch((err) =>
-          console.error(
-            "Failed to send verification email:",
-            err
-          )
-        );
-        */
+                const { subject, html } = verificationCodeEmail(verificationCode);
+                await sendEmail({ to: user.email, subject, html });
 
         // ============================================================
         // SMS VERIFICATION

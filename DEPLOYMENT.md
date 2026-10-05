@@ -67,12 +67,21 @@ Each of these degrades gracefully if unset (logs a warning, feature no-ops)
   subdomain after deploy.
 - **Cloudinary** (uploads): `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
   `CLOUDINARY_API_SECRET`.
-- **Brevo** (transactional email): `BREVO_API_KEY`, `SMTP_FROM` (must be a
-  verified sender/domain in Brevo). Empty key = verification/reset/reminder
-  emails silently don't send in production (logged as an error, not thrown).
-- **Twilio** (SMS): only relevant if you set `SMS_VERIFICATION_ENABLED=true`
-  (off by default). `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
-  `TWILIO_FROM_NUMBER`. `SMS_ALLOWED_COUNTRY_CODES` defaults to `+216`.
+- **Resend** (transactional email): `RESEND_API_KEY`, `RESEND_FROM` (a sender
+  address on a verified domain). Both are required at production startup because
+  account verification, password reset, invitations, and reminders use email.
+- **TextBee** (SMS): `TEXTBEE_API_KEY`; optionally set `TEXTBEE_DEVICE_ID` to
+  choose a paired Android device (otherwise TextBee uses the default enabled
+  device). The phone must remain online with SMS permission and an active SIM.
+  SMS verification is opt-in with `SMS_VERIFICATION_ENABLED=true`; when enabled,
+  production startup also requires the API key. `SMS_ALLOWED_COUNTRY_CODES`
+  defaults to `+216`.
+
+Create the Resend key and verify `RESEND_FROM`'s domain in Resend before
+deploying. TextBee needs an Android device paired in its dashboard and kept
+online; a successful API response means the SMS was queued, not delivered.
+Rotate any provider key that has been pasted into chat, tickets, or source
+control, and enter its replacement only in a secret manager.
 
 ## 5. Cron auth
 
@@ -151,7 +160,7 @@ demo clubs/accounts.
       (`curl -H "Authorization: Bearer $CRON_SECRET" https://yourdomain.com/api/cron/trial-check`)
       to confirm the secret and DB access work before the schedule fires
 - [ ] Upload a club logo/avatar — confirms Cloudinary credentials
-- [ ] Trigger a password reset — confirms Brevo credentials and that the
+- [ ] Trigger a password reset — confirms Resend credentials and that the
       email lands on the club's own domain, not the apex
 
 ## Known gaps (see `CHANGES.md` for the full list)

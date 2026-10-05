@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   if (isAuthResponse(auth)) return auth;
 
   try {
-    const plans = await prisma.membershipPlan.findMany({ where: { clubId: auth.clubId as string }, orderBy: { price: "asc" } });
+    const plans = await prisma.membershipPlan.findMany({ where: { clubId: auth.clubId as string }, orderBy: { price: "asc" }, take: 200 });
     return NextResponse.json({ plans });
   } catch (error) {
     console.error("Admin plans GET error:", error);

@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
       UPSTASH_REDIS: !!process.env.UPSTASH_REDIS_REST_URL,
       GOOGLE_OAUTH: !!process.env.GOOGLE_CLIENT_ID,
       KONNECT: !!process.env.KONNECT_API_KEY,
-      SMTP: !!process.env.SMTP_URL,
+      SMTP: !!process.env.RESEND_API_KEY && !!process.env.RESEND_FROM,
+      TEXTBEE: !!process.env.TEXTBEE_API_KEY,
       CRON_SECRET: !!process.env.CRON_SECRET,
     };
 

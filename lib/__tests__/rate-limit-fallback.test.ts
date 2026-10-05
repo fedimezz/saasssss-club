@@ -15,6 +15,7 @@ describe("checkRateLimit — no Redis configured", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("does not throw and enforces the limit in memory", async () => {
@@ -32,6 +33,12 @@ describe("checkRateLimit — no Redis configured", () => {
     expect((await checkRateLimit("b", 1, 1_000)).allowed).toBe(true);
     vi.advanceTimersByTime(1_001);
     expect((await checkRateLimit("a", 1, 1_000)).allowed).toBe(true);
+  });
+
+  it("fails closed in production when Redis is not configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const { checkRateLimit } = await import("../rate-limit");
+    expect((await checkRateLimit("login:1.1.1.1", 2, 60_000)).allowed).toBe(false);
   });
 });
 
@@ -66,5 +73,19 @@ describe("checkRateLimit — Upstash outage", () => {
     const b = await checkRateLimit("k", 1, 60_000);
     expect(a.allowed).toBe(true);
     expect(b.allowed).toBe(false);
+  });
+
+  it("fails closed on Redis outage in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.doMock("@upstash/redis", () => ({ Redis: { fromEnv: () => ({}) } }));
+    vi.doMock("@upstash/ratelimit", () => {
+      class Broken {
+        async limit() { throw new Error("network down"); }
+        static slidingWindow() { return {}; }
+      }
+      return { Ratelimit: Broken };
+    });
+    const { checkRateLimit } = await import("../rate-limit");
+    expect((await checkRateLimit("k", 1, 60_000)).allowed).toBe(false);
   });
 });

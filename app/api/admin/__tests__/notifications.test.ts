@@ -156,7 +156,7 @@ describe("POST /api/admin/notifications — EMAIL/SMS dispatch (this session's n
       { id: "u1", email: "fails@test.com", phone: null, preferences: { emailNotifications: true, smsNotifications: false } },
       { id: "u2", email: "ok@test.com", phone: null, preferences: { emailNotifications: true, smsNotifications: false } },
     ]);
-    sendEmailMock.mockImplementationOnce(() => Promise.reject(new Error("SMTP down")));
+    sendEmailMock.mockImplementationOnce(() => Promise.reject(new Error("Resend unavailable")));
     sendEmailMock.mockImplementationOnce(() => Promise.resolve());
 
     const res = await POST(

@@ -15,6 +15,7 @@ const clubFindUnique = vi.fn();
 const userFindFirst = vi.fn();
 const userFindUnique = vi.fn();
 const userUpdate = vi.fn();
+vi.mock("@/lib/one-time", () => ({ consumeOnce: vi.fn().mockResolvedValue(true) }));
 vi.mock("@/lib/prisma", () => ({
   default: {
     club: { findUnique: (...a: unknown[]) => clubFindUnique(...a) },

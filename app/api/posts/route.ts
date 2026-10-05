@@ -14,13 +14,15 @@ export async function GET(request: NextRequest) {
     where: { clubId: tenant.id, isPublished: true },
     include: {
       author: { select: { id: true, name: true, avatar: true } },
-      likes: { select: { userId: true } },
+      likes: { select: { userId: true }, take: 500 },
       comments: {
         include: { user: { select: { id: true, name: true, avatar: true } } },
         orderBy: { createdAt: "asc" },
+        take: 100,
       },
     },
     orderBy: { createdAt: "desc" },
+    take: 50,
   });
   return NextResponse.json(posts);
 }

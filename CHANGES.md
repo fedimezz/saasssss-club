@@ -1,5 +1,12 @@
 # Phases 1–4 — security, correctness, and cleanup
 
+## Provider switch — Resend + TextBee
+
+- Replaced disabled Brevo mail handling with Resend's `POST /emails` API. Configure `RESEND_API_KEY` and `RESEND_FROM`; production startup requires both.
+- Replaced Twilio REST SMS with TextBee `POST /api/v1/gateway/send-sms` using `TEXTBEE_API_KEY`; `TEXTBEE_DEVICE_ID` is optional and selects a paired Android device. The default TextBee device is used when omitted.
+- Registration now generates a random six-digit code, stores only its hash, sends it via Resend, and no longer logs codes or accepts the old fixed `123456` bypass.
+- Credentials pasted into chat were not written to source, `.env`, or this file. Rotate both keys and set fresh values in the secret store.
+
 Verified in a sandbox (no live DB, no real Konnect/Google/Twilio/Cloudinary credentials): `tsc --noEmit` clean · Vitest **254/254** (was 124) · ESLint **0 errors, 52 warnings** (was 96) · `next build` passes.
 
 ## DEPLOY ORDER (important)

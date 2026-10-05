@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
         invitationToken: true,
       },
       orderBy: { createdAt: "asc" },
+      take: 250,
     });
 
     // Never expose the token hash — only whether an invitation is pending.

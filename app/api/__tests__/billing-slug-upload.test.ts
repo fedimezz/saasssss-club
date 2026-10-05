@@ -128,7 +128,7 @@ describe("POST /api/upload", () => {
   it("a member's image is capped at 5MB (staff get 10MB)", async () => {
     const big = Buffer.concat([PNG, Buffer.alloc(6 * 1024 * 1024)]);
     asUser("MEMBER");
-    expect((await call(new File([big], "big.png", { type: "image/png" }))).status).toBe(400);
+    expect((await call(new File([big], "big.png", { type: "image/png" }))).status).toBe(413);
     asUser("ADMIN");
     expect((await call(new File([big], "big.png", { type: "image/png" }))).status).toBeLessThan(300);
   });
@@ -155,6 +155,19 @@ describe("POST /api/upload", () => {
         method: "POST",
         headers: { "content-length": String(500 * 1024 * 1024), "content-type": "multipart/form-data; boundary=x" },
         body: "x",
+      })
+    );
+    expect(res.status).toBe(413);
+  });
+
+  it("rejects an oversized streamed body even when Content-Length is absent", async () => {
+    asUser("MEMBER");
+    const { POST } = await import("@/app/api/upload/route");
+    const res = await POST(
+      new NextRequest("https://club-a.test/api/upload", {
+        method: "POST",
+        headers: { "content-type": "multipart/form-data; boundary=x" },
+        body: "x".repeat(5 * 1024 * 1024 + 65 * 1024),
       })
     );
     expect(res.status).toBe(413);

@@ -24,8 +24,6 @@ function requestHosts(request: Request): string[] {
   const hosts = new Set<string>();
   const host = request.headers.get("host");
   if (host) hosts.add(host.toLowerCase());
-  const forwarded = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  if (forwarded) hosts.add(forwarded.toLowerCase());
   try {
     hosts.add(new URL(request.url).host.toLowerCase());
   } catch {

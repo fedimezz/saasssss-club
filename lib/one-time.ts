@@ -28,6 +28,11 @@ export async function consumeOnce(key: string, ttlSeconds: number): Promise<bool
     }
   }
 
+  if (process.env.NODE_ENV === "production") {
+    console.error("[one-time] Upstash is required in production; refusing single-use token consumption.");
+    return false;
+  }
+
   const now = Date.now();
   if (memory.size > MAX_MEMORY_KEYS) {
     for (const [k, exp] of memory) if (exp <= now) memory.delete(k);

@@ -18,59 +18,32 @@ interface SendEmailInput {
 }
 
 export async function sendEmail({ to, subject, html }: SendEmailInput) {
-  // ============================================================
-  // TEMPORARILY DISABLED — BREVO
-  // Keep this code commented for later reactivation.
-  // ============================================================
-
-  console.log("================================");
-  console.log("EMAIL VERIFICATION (TEMP MODE)");
-  console.log("TO:", to);
-  console.log("SUBJECT:", subject);
-  console.log("BODY:", html);
-  console.log("================================");
-
-  /*
-  const apiKey = process.env.BREVO_API_KEY;
-  const fromEmail = process.env.SMTP_FROM ?? "no-reply@gymos.app";
-
-  if (!apiKey) {
-    if (process.env.NODE_ENV === "production") {
-      console.error(
-        `[email] BREVO_API_KEY is not set — email to=${to} subject="${subject}" was NOT sent.`
-      );
-    } else {
-      console.log(`[email:dev] to=${to} subject="${subject}"\n${html}`);
-    }
-    return;
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM;
+  if (!apiKey || !from) {
+    console.error("[email] Resend is not configured; email was not sent.");
+    throw new Error("Email provider is not configured");
   }
 
-  const res = await fetchWithTimeout("https://api.brevo.com/v3/smtp/email", {
+  const res = await fetchWithTimeout("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      "api-key": apiKey,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      sender: { email: fromEmail },
-      to: [{ email: to }],
+      from,
+      to: [to],
       subject,
-      htmlContent: html,
+      html,
     }),
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-
-    console.error("========== BREVO ERROR ==========");
-    console.error("STATUS:", res.status);
-    console.error("RESPONSE BODY:", body);
-    console.error("================================");
-
-    throw new Error(`Brevo send failed (${res.status}): ${body}`);
+    console.error(`[email] Resend request failed (${res.status}).`);
+    throw new Error(`Resend send failed (${res.status})`);
   }
-  */
 }
 
 export function verificationCodeEmail(code: string) {

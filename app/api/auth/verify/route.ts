@@ -13,11 +13,7 @@ import {
 import { generateToken } from "@/lib/auth";
 import { setAuthCookie } from "@/lib/auth-cookie";
 
-// POST /api/auth/verify
-// { email, code }
-//
-// TEMPORARY DEVELOPMENT MODE:
-// 123456 is accepted as the verification code.
+// POST /api/auth/verify { email, code }
 
 export async function POST(request: NextRequest) {
     try {
@@ -81,11 +77,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
         );
 
-        if (
-            !user ||
-            !user.verificationCodeHash ||
-            !user.verificationCodeExpiry
-        ) {
+        if (!user?.verificationCodeHash || !user.verificationCodeExpiry) {
             return invalidResponse;
         }
 
@@ -101,18 +93,7 @@ export async function POST(request: NextRequest) {
             return invalidResponse;
         }
 
-        // ============================================================
-        // TEMPORARY DEVELOPMENT MODE
-        // 123456 is accepted.
-        //
-        // The normal hashed-code verification remains active too.
-        // ============================================================
-
-        const isValidCode =
-            code === "123456" ||
-            hashSecret(code) === user.verificationCodeHash;
-
-        if (!isValidCode) {
+        if (hashSecret(code) !== user.verificationCodeHash) {
             return invalidResponse;
         }
 

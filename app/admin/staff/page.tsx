@@ -404,7 +404,7 @@ export default function StaffPage() {
               <option value="OWNER">Owner</option>
             </select>
             <button onClick={handleCreate} disabled={saving} className="w-full flex items-center justify-center gap-2 bg-[var(--primary)] text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-60">
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Envoyer l'invitation
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Envoyer l&apos;invitation
             </button>
           </div>
         </div>

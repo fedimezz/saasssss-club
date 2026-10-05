@@ -35,8 +35,8 @@ Repo : `fedimezz/saasssss-club`
 | Cache/Rate-limit/Pub-sub | Upstash Redis (REST-based, compatible edge) |
 | Stockage fichiers | Cloudinary |
 | Paiement membres | Konnect (paiement tunisien) |
-| SMS | Twilio |
-| Email | Nodemailer / Brevo |
+| SMS | TextBee |
+| Email | Resend |
 | Animations | Framer Motion |
 | Icônes | Lucide React |
 | Tests | Vitest |

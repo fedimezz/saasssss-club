@@ -1,16 +1,39 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import Script from "next/script";
+import { headers } from "next/headers";
+import { resolveTenantFromRequest } from "@/lib/tenant";
+import { buildTenantOrigin } from "@/lib/tenant-url";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { ClubSettingsProvider } from "@/context/ClubSettingsContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import RootShell from "@/components/layout/RootShell";
 
-export const metadata: Metadata = {
-  title: "Le Club Gammarth",
-  description: "Premium Sports Club Dashboard",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("host") ?? "localhost:3000";
+  const protocol = requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim()
+    ?? (host.split(":")[0] === "localhost" || host.endsWith(".localhost") ? "http" : "https");
+  const request = new Request(`${protocol}://${host}/`, { headers: requestHeaders });
+  const tenant = await resolveTenantFromRequest(request);
+  if (!tenant) {
+    const base = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+    return {
+      title: "Le Club Gammarth",
+      description: "Plateforme de gestion pour clubs sportifs.",
+      ...(base ? { metadataBase: new URL(base) } : {}),
+    };
+  }
+
+  const origin = buildTenantOrigin(tenant, `${protocol}://${host}`);
+  return {
+    title: { default: tenant.name, template: `%s | ${tenant.name}` },
+    description: `Site officiel de ${tenant.name}, club sportif et espace membres.`,
+    metadataBase: new URL(origin),
+    openGraph: { title: tenant.name, description: `Site officiel de ${tenant.name}.`, url: origin },
+  };
+}
 
 // This runs synchronously, before React hydrates and before first paint.
 // It reads the SAME storage key / fallback logic as readStoredTheme() in
@@ -49,19 +72,20 @@ const langInitScript = `
 })();
 `;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="fr" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className="bg-primary text-primary">
         {/* next/script (not a raw <script>): React 19 warns "Encountered a script
             tag while rendering React component". beforeInteractive still runs
             these before hydration/first paint, exactly like the raw tags did. */}
-        <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <Script id="lang-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: langInitScript }} />
+        <Script id="theme-init" nonce={nonce} strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <Script id="lang-init" nonce={nonce} strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: langInitScript }} />
         <ThemeProvider>
           <ClubSettingsProvider>
             <AuthProvider>

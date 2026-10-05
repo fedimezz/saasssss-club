@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         location: true,
       },
       orderBy: [{ startTime: "asc" }],
+      take: 500,
     });
 
     return NextResponse.json({ sessions });

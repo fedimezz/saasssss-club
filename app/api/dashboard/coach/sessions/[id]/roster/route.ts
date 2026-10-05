@@ -28,6 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       where: { sessionId, clubId: auth.user.clubId!, isCancelled: false },
       include: { user: { select: { id: true, name: true, avatar: true } } },
       orderBy: { bookedAt: "asc" },
+      take: 500,
     });
 
     const todayStart = new Date();

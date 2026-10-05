@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         currentBookings: true,
       },
       orderBy: [{ day: "asc" }, { startTime: "asc" }],
+      take: 100,
     });
 
     return NextResponse.json({ coach: { id: coach.id, name: coach.name }, sessions });

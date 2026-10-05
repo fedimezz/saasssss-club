@@ -5,7 +5,7 @@
 - Tailwind CSS v4 · Custom CSS variables theming
 - JWT (jsonwebtoken) · httpOnly cookies · Jose (Edge)
 - Upstash Redis (rate limiting) · Cloudinary (image uploads)
-- Konnect payment gateway · Nodemailer + Twilio SMS
+- Konnect payment gateway · Resend email + TextBee SMS
 - Vitest (86 tests)
 
 ## Architecture: Multi-Tenant by Subdomain
@@ -14,6 +14,7 @@
 - Edge proxy (`proxy.ts`) injects `x-club-slug` header + JWT auth guard
 - Every DB query MUST include `clubId` — never trust client-supplied clubId
 - `lib/auth.ts`: `requireUser/requireAdmin/requireOwner/requireCoach/requireSuperAdmin`
+- Email: Resend (`RESEND_API_KEY`, verified `RESEND_FROM`); SMS: TextBee (`TEXTBEE_API_KEY`, optional `TEXTBEE_DEVICE_ID`)
 
 ## Roles
 - SUPER_ADMIN  — platform staff, no clubId, → /platform
@@ -122,5 +123,5 @@ UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN,
 CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET,
 GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI,
 KONNECT_API_KEY, KONNECT_BASE_URL, KONNECT_WALLET_ID,
-SMTP_URL, SMTP_FROM, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER,
+RESEND_API_KEY, RESEND_FROM, TEXTBEE_API_KEY, TEXTBEE_DEVICE_ID,
 CRON_SECRET, DEV_DEFAULT_CLUB_SLUG (dev only)

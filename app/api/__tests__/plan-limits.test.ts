@@ -13,9 +13,11 @@ const ADMIN_A = { id: "adm-id", email: "admin@a.test", role: "ADMIN", name: "Adm
 
 const mockUser  = { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn() };
 const mockClub  = { findUnique: vi.fn() };
+const mockCoach = { create: vi.fn() };
+const mockTransaction = vi.fn(async (callback: (tx: unknown) => unknown) => callback({ user: mockUser, coach: mockCoach }));
 const checkLimitMock = vi.fn();
 
-vi.mock("@/lib/prisma", () => ({ default: { user: mockUser, club: mockClub } }));
+vi.mock("@/lib/prisma", () => ({ default: { user: mockUser, club: mockClub, $transaction: mockTransaction } }));
 vi.mock("@/lib/plan-limits", () => ({
   checkLimit:   (...a: unknown[]) => checkLimitMock(...a),
   checkFeature: vi.fn().mockResolvedValue({ ok: true }),

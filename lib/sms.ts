@@ -1,28 +1,13 @@
 // src/lib/sms.ts
 //
-// Minimal SMS sender via Twilio's REST API (plain fetch, no SDK dependency
-// needed). Mirrors lib/email.ts: if Twilio isn't configured (e.g. local
-// dev), it logs the message to the server console instead of throwing, so
-// nothing that calls this breaks when SMS isn't set up yet.
-//
-// Required env vars (Twilio Console → Account):
-//   TWILIO_ACCOUNT_SID
-//   TWILIO_AUTH_TOKEN
-//   TWILIO_FROM_NUMBER   — an SMS-capable Twilio number, E.164 format (+216...)
-//
-// Swap the provider by rewriting the body of sendSms() — the call sites
-// (sendSms({ to, body })) won't need to change.
+// Sends SMS through TextBee using the existing provider-neutral sendSms API.
 
 import { toE164 } from "@/lib/phone";
 import { fetchWithTimeout } from "@/lib/http";
 
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
-const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || "";
-
-export const isSmsConfigured = Boolean(
-  TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER
-);
+export function isSmsConfigured(): boolean {
+  return Boolean(process.env.TEXTBEE_API_KEY);
+}
 
 // Destination allow-list (SMS pumping / toll fraud): an attacker who can make
 // the app text arbitrary numbers can make it text premium-rate numbers in
@@ -55,32 +40,36 @@ export async function sendSms({ to, body }: SendSmsInput): Promise<void> {
     throw new Error("SMS destination rejected (invalid or not in allowed countries)");
   }
 
-  if (!isSmsConfigured) {
-    // Dev convenience only. In production the message (which can be a login
-    // OTP) and the phone number must NEVER reach the logs.
+  const apiKey = process.env.TEXTBEE_API_KEY;
+  if (!apiKey) {
     if (process.env.NODE_ENV === "production") {
-      console.error("[sms] Twilio is not configured; SMS not sent.");
-      return;
+      console.error("[sms] TextBee is not configured; SMS was not sent.");
+      throw new Error("SMS provider is not configured");
     }
-    console.log(`[sms:dev] to=${destination}\n${body}`);
+    console.warn("[sms:dev] TextBee is not configured; SMS was not sent.");
     return;
   }
 
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
-  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64");
+  const deviceId = process.env.TEXTBEE_DEVICE_ID?.trim();
 
-  const res = await fetchWithTimeout(url, {
+  const res = await fetchWithTimeout(
+    `${(process.env.TEXTBEE_BASE_URL || "https://api.textbee.dev/api/v1").replace(/\/$/, "")}/gateway/send-sms`,
+    {
     method: "POST",
     headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+      "x-api-key": apiKey,
+      "Content-Type": "application/json",
     },
-    body: new URLSearchParams({ To: destination, From: TWILIO_FROM_NUMBER, Body: body }),
-  });
+      body: JSON.stringify({
+        recipients: [destination],
+        message: body,
+        ...(deviceId ? { deviceId } : {}),
+      }),
+    }
+  );
 
   if (!res.ok) {
-    // Status only: Twilio's error body can echo the destination number.
-    throw new Error(`Twilio SMS send failed (${res.status})`);
+    throw new Error(`TextBee SMS send failed (${res.status})`);
   }
 }
 

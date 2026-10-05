@@ -37,7 +37,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/lib/plan-limits",  () => ({ checkLimit: vi.fn().mockResolvedValue({ ok: true }), checkFeature: vi.fn().mockResolvedValue({ ok: true }), getFullUsage: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/activity-log", () => ({ logAction: vi.fn() }));
-vi.mock("@/lib/permissions",  () => ({ hasPermission: vi.fn().mockResolvedValue(true) }));
+vi.mock("@/lib/permissions",  () => ({ hasPermission: vi.fn().mockResolvedValue(true), hasAnyPermission: vi.fn().mockResolvedValue(true) }));
 vi.mock("@/lib/notify",       () => ({ notifyAllMembers: vi.fn(), notifyUsers: vi.fn() }));
 
 beforeAll(() => {

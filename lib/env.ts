@@ -6,15 +6,47 @@
 //   REQUIRED  — the app cannot run correctly without these. Missing one
 //               throws at startup (instrumentation.ts) and fails the deploy
 //               health check instead of silently degrading in production.
-//   RECOMMENDED — features that fail soft today (SMS/email log to console,
-//               Cloudinary uploads 501, Konnect 501) when unset. Logged as a
-//               warning so it's visible without being fatal — plenty of
-//               environments (a demo, most CI) legitimately run without them.
+//   RECOMMENDED — integrations that can be omitted for local/test runs.
+//               Production email is required; SMS is required when SMS
+//               verification is enabled.
 
 interface Check {
   name: string;
   required: boolean;
   validate?: (value: string) => string | null; // returns an error message, or null if OK
+}
+
+const PRODUCTION_REQUIRED = new Set([
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN",
+  "RESEND_API_KEY",
+  "RESEND_FROM",
+]);
+
+function isRequired(name: string, required: boolean): boolean {
+  return required || (process.env.NODE_ENV === "production" && PRODUCTION_REQUIRED.has(name));
+}
+
+function missingChecks(): string[] {
+  const missing = CHECKS.filter((check) => isRequired(check.name, check.required) && !process.env[check.name])
+    .map((check) => check.name);
+  if (process.env.NODE_ENV === "production" && process.env.SMS_VERIFICATION_ENABLED === "true" && !process.env.TEXTBEE_API_KEY) {
+    missing.push("TEXTBEE_API_KEY (required when SMS_VERIFICATION_ENABLED=true)");
+  }
+  return missing;
+}
+
+function invalidChecks(): string[] {
+  return CHECKS.flatMap((check) => {
+    const value = process.env[check.name];
+    const error = value ? check.validate?.(value) : null;
+    return error ? [`${check.name} (${error})`] : [];
+  });
+}
+
+function recommendedChecks(): string[] {
+  return CHECKS.filter((check) => !isRequired(check.name, check.required) && !process.env[check.name])
+    .map((check) => check.name);
 }
 
 const CHECKS: Check[] = [
@@ -36,8 +68,11 @@ const CHECKS: Check[] = [
   },
   { name: "COOKIE_DOMAIN", required: false },
   { name: "CRON_SECRET", required: false },
-  { name: "BREVO_API_KEY", required: false },
-  { name: "TWILIO_ACCOUNT_SID", required: false },
+  { name: "RESEND_API_KEY", required: false },
+  { name: "RESEND_FROM", required: false },
+  { name: "TEXTBEE_API_KEY", required: false },
+  { name: "TEXTBEE_DEVICE_ID", required: false },
+  { name: "TEXTBEE_BASE_URL", required: false },
   { name: "CLOUDINARY_URL", required: false },
   { name: "KONNECT_API_KEY", required: false },
   { name: "GOOGLE_CLIENT_ID", required: false },
@@ -45,20 +80,9 @@ const CHECKS: Check[] = [
 ];
 
 export function validateEnv(): void {
-  const missing: string[] = [];
-  const invalid: string[] = [];
-  const recommended: string[] = [];
-
-  for (const check of CHECKS) {
-    const value = process.env[check.name];
-    if (!value) {
-      if (check.required) missing.push(check.name);
-      else recommended.push(check.name);
-      continue;
-    }
-    const err = check.validate?.(value);
-    if (err) invalid.push(`${check.name} (${err})`);
-  }
+  const missing = missingChecks();
+  const invalid = invalidChecks();
+  const recommended = recommendedChecks();
 
   if (recommended.length > 0) {
     console.warn(

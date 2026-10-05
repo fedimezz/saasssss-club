@@ -12,8 +12,8 @@ import { sendSms } from "@/lib/sms";
 //
 // `channels` controls how the notification SHOULD be delivered. SITE always
 // creates a Notification row (shown in the bell). EMAIL/SMS additionally
-// dispatch through lib/email.ts / lib/sms.ts — both already fall back to
-// logging to the server console when SMTP_URL / Twilio env vars aren't
+// dispatch through lib/email.ts / lib/sms.ts — provider configuration is
+// handled by Resend and TextBee in those shared helpers.
 // configured (same pattern as the verification-code and password-reset
 // flows), so this works in local dev without real credentials.
 //

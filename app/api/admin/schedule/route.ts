@@ -64,9 +64,11 @@ export async function GET(request: NextRequest) {
       include: {
         sessions: {
           orderBy: [{ day: "asc" }, { startTime: "asc" }],
+          take: 500,
         },
         _count: { select: { sessions: true } },
       },
+      take: 12,
     });
 
     return NextResponse.json({ plans });

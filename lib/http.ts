@@ -1,6 +1,6 @@
 // lib/http.ts — outbound HTTP with a hard timeout.
 //
-// A hung third party (Konnect, Twilio, Brevo, Google, Cloudinary) must never
+// A hung third party (Konnect, TextBee, Resend, Google, Cloudinary) must never
 // pin a serverless function until the platform kills it.
 
 export const DEFAULT_OUTBOUND_TIMEOUT_MS = 10_000;

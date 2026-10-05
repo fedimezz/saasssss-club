@@ -3,27 +3,33 @@
 // Generic confirmation modal for the /platform area.
 // Render it conditionally ({dialog && <ConfirmDialog … />}) so its internal
 // state resets every time it opens.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AlertTriangle, Loader2, X } from "lucide-react";
 
 interface ConfirmDialogProps {
-  title: string;
-  description?: React.ReactNode;
-  confirmLabel: string;
-  tone?: "danger" | "default";
+  readonly title: string;
+  readonly description?: React.ReactNode;
+  readonly confirmLabel: string;
+  readonly tone?: "danger" | "default";
   /** Confirm stays disabled until the user types exactly this (e.g. the club slug). */
-  requireText?: string;
+  readonly requireText?: string;
   /** Optional extra input (reason, new password, …). Its value is passed to onConfirm. */
-  inputLabel?: string;
-  inputPlaceholder?: string;
-  inputType?: "text" | "password" | "number";
-  inputRequired?: boolean;
-  inputMin?: number;
-  inputMax?: number;
-  loading?: boolean;
-  error?: string | null;
-  onConfirm: (value: string) => void;
-  onCancel: () => void;
+  readonly inputLabel?: string;
+  readonly inputPlaceholder?: string;
+  readonly inputType?: "text" | "password" | "number";
+  readonly inputRequired?: boolean;
+  readonly inputMin?: number;
+  readonly inputMax?: number;
+  readonly loading?: boolean;
+  readonly error?: string | null;
+  readonly onConfirm: (value: string) => void;
+  readonly onCancel: () => void;
+}
+
+function getFocusableElements(dialog: HTMLDialogElement | null): NodeListOf<HTMLElement> | undefined {
+  return dialog?.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
 }
 
 export default function ConfirmDialog({
@@ -34,9 +40,34 @@ export default function ConfirmDialog({
   const [typed, setTyped] = useState("");
   const [value, setValue] = useState("");
   const titleId = useId();
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !loading) onCancel(); };
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    (getFocusableElements(dialogRef.current)?.[0] ?? dialogRef.current)?.focus();
+    return () => previousFocus?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) onCancel();
+      if (e.key !== "Tab") return;
+      const items = getFocusableElements(dialogRef.current);
+      if (!items?.length) {
+        e.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !dialogRef.current?.contains(document.activeElement))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [loading, onCancel]);
@@ -47,14 +78,17 @@ export default function ConfirmDialog({
   const danger = tone === "danger";
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
-      onMouseDown={(e) => { if (e.target === e.currentTarget && !loading) onCancel(); }}
+    <dialog
+      open
+      ref={dialogRef}
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className="fixed inset-0 z-70 m-0 flex h-full max-h-none w-full max-w-none items-end justify-center border-0 bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <div className="flex items-start gap-3">
           {danger && (
-            <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-rose-500/10 text-rose-500">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-500/10 text-rose-500">
               <AlertTriangle className="h-4 w-4" />
             </span>
           )}
@@ -119,6 +153,6 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

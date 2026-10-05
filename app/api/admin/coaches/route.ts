@@ -48,9 +48,11 @@ export async function GET(request: NextRequest) {
           where: { weeklyPlan: { isActive: true, clubId: auth.user.clubId as string } },
           select: { id: true, activity: true, day: true, startTime: true, endTime: true, location: true },
           orderBy: [{ day: "asc" }, { startTime: "asc" }],
+          take: 250,
         },
       },
       orderBy: { name: "asc" },
+      take: 250,
     });
 
     return NextResponse.json({ coaches });

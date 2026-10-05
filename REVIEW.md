@@ -55,7 +55,7 @@ Implemented option (b) from the original note: `/api/auth/google` folds the club
 `sentry.{client,server,edge}.config.ts` are 10-byte `export {};` stubs and `@sentry/nextjs` isn't a dependency. Today production errors go only to Vercel logs. If you add Sentry, extend the CSP `connect-src` (currently `'self' blob: data:`).
 
 ### 4.3 Email delivery — Medium
-Production needs `BREVO_API_KEY` + a verified sender. Without it, sign-up verification, password reset and reminders silently don't arrive (now logged as an error, not printed).
+Historical note: the original review referred to Brevo. Current email delivery uses Resend (`RESEND_API_KEY`, verified `RESEND_FROM`) and SMS uses TextBee (`TEXTBEE_API_KEY`).
 
 ### 4.4 Tests mock Prisma everywhere — Medium
 14 test files for 88 API routes; the "tenant isolation" suite proves the guards call `where: { clubId }` against a mock, not against real data. CI already has a Postgres service — add a small integration suite (seed two clubs, assert club A's token gets 403/empty on club B's ids) for bookings, payments, members, notifications.

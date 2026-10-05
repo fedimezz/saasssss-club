@@ -99,6 +99,9 @@ export async function checkRateLimit(
     warnOnce(
       "UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN not set — using per-process in-memory rate limiting."
     );
+    if (process.env.NODE_ENV === "production") {
+      return { allowed: false, remaining: 0, resetAt: Date.now() + windowMs };
+    }
     return checkInMemory(key, limit, windowMs);
   }
 
@@ -111,6 +114,9 @@ export async function checkRateLimit(
     };
   } catch (err) {
     console.error("[rate-limit] Upstash call failed — falling back to in-memory:", (err as Error).message);
+    if (process.env.NODE_ENV === "production") {
+      return { allowed: false, remaining: 0, resetAt: Date.now() + windowMs };
+    }
     return checkInMemory(key, limit, windowMs);
   }
 }

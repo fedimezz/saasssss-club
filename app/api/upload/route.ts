@@ -37,6 +37,30 @@ const STAFF_ROLES = new Set(["ADMIN", "OWNER"]);
 const MEMBER_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
 
+async function readBoundedBody(request: Request, maxBytes: number): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!request.body) return null;
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
+}
+
 // Uploads per user per hour. Staff need headroom (a news post with several
 // media, a coach roster); members only change an avatar now and then.
 const STAFF_UPLOADS_PER_HOUR = 60;
@@ -76,11 +100,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Trop de téléversements, réessayez plus tard." }, { status: 429 });
     }
 
-    // Refuse oversized bodies BEFORE req.formData() buffers them in memory.
+    // Reject declared oversize requests early, then enforce the same cap on
+    // actual streamed bytes before multipart parsing.
     const declaredLength = Number(req.headers.get("content-length") ?? "0");
     const hardCap = (isStaff ? MAX_SIZE_BY_KIND["video/"] : MEMBER_MAX_IMAGE_BYTES) + MULTIPART_OVERHEAD_BYTES;
     if (Number.isFinite(declaredLength) && declaredLength > hardCap) {
       return NextResponse.json({ error: "Fichier trop volumineux" }, { status: 413 });
+    }
+
+    const requestBody = await readBoundedBody(req, hardCap);
+    if (!requestBody) {
+      return NextResponse.json({ error: "Fichier trop volumineux ou corps vide" }, { status: 413 });
     }
 
     if (!isCloudinaryConfigured) {
@@ -93,7 +123,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const formData = await req.formData();
+    const boundedRequest = new Request(req.url, {
+      method: "POST",
+      headers: req.headers,
+      body: requestBody,
+    });
+    const formData = await boundedRequest.formData();
     const file = formData.get("file");
 
     if (!(file instanceof File)) {
@@ -137,7 +172,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Le fichier n'est pas une image valide" }, { status: 400 });
     }
 
-    const mediaType = prefix === "image/" ? "image" : prefix === "video/" ? "video" : "audio";
+    let mediaType: "image" | "video" | "audio";
+    switch (prefix) {
+      case "image/": mediaType = "image"; break;
+      case "video/": mediaType = "video"; break;
+      case "audio/": mediaType = "audio"; break;
+    }
     // Cloudinary has no dedicated "audio" resource type — audio files go
     // through the "video" pipeline (it handles any audio codec fine).
     const cloudinaryResourceType = prefix === "image/" ? "image" : "video";

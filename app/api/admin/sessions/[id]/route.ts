@@ -119,6 +119,9 @@ export async function DELETE(
   try {
     const auth = await requireAdmin(request);
     if (!auth.ok) return NextResponse.json({ error: "Accès refusé" }, { status: auth.status });
+    if (!(await hasPermission(auth.user, "planning.manage"))) {
+      return NextResponse.json({ error: "Permission requise : gérer le planning" }, { status: 403 });
+    }
 
     const { id } = await params;
 

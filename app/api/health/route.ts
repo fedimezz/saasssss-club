@@ -32,8 +32,8 @@ export async function GET() {
       redisMs = Date.now() - t;
       redisOk = true;
     } else {
-      // Redis not configured (local dev without Upstash) — skip, don't fail
-      redisOk = true;
+      // Redis is optional for local development but required by production.
+      redisOk = process.env.NODE_ENV !== "production";
     }
   } catch (err) {
     log.error("health_redis_check_failed", { error: (err as Error).message });

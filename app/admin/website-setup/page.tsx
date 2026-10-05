@@ -128,10 +128,9 @@ export default function WebsiteSetupWizard() {
       }
       if (contentRes.ok && Array.isArray(contentJson.pages)) {
         const wanted = new Set<string>(WIZARD_PAGE_KEYS);
-        const filtered = contentJson.pages.filter((p: PageDef) => wanted.has(p.pageKey));
-        filtered.sort(
-          (a: PageDef, b: PageDef) => WIZARD_PAGE_KEYS.indexOf(a.pageKey as any) - WIZARD_PAGE_KEYS.indexOf(b.pageKey as any)
-        );
+        const filtered = (contentJson.pages as PageDef[]).filter((p) => wanted.has(p.pageKey as typeof WIZARD_PAGE_KEYS[number]));
+        const pageOrder = new Map<string, number>(WIZARD_PAGE_KEYS.map((key, index) => [key, index]));
+        filtered.sort((a, b) => (pageOrder.get(a.pageKey) ?? Number.MAX_SAFE_INTEGER) - (pageOrder.get(b.pageKey) ?? Number.MAX_SAFE_INTEGER));
         setPages(filtered);
         if (filtered.length > 0) setActivePageKey(filtered[0].pageKey);
       }

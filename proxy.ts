@@ -16,12 +16,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { verifyOrigin } from "@/lib/csrf";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 // Note: lib/logger uses console internally — safe in Edge Runtime
 import { log } from "@/lib/logger";
 import { extractSlugFromHost } from "@/lib/host";
 import { clearAuthCookie, AUTH_COOKIE_NAME } from "@/lib/auth-cookie";
-import { getClientIp } from "@/lib/rate-limit";
 
 // General write-rate-limit for authenticated API requests, applied centrally
 // (Phase 10 — "rate-limit sur toutes les routes write") rather than added
@@ -32,6 +31,45 @@ import { getClientIp } from "@/lib/rate-limit";
 // verified below.
 const WRITE_LIMIT = 60;
 const WRITE_WINDOW_MS = 60 * 1000;
+const isDev = process.env.NODE_ENV === "development";
+
+function buildCsp(nonce: string, host: string): string {
+  const sources = new Set(["'self'"]);
+  const rawAppUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (rawAppUrl) {
+    try {
+      const appUrl = new URL(rawAppUrl);
+      const port = appUrl.port ? `:${appUrl.port}` : "";
+      sources.add(`${appUrl.protocol}//${appUrl.hostname.replace(/^www\./, "")}${port}`);
+      sources.add(`${appUrl.protocol}//*.${appUrl.hostname.replace(/^www\./, "")}${port}`);
+    } catch {
+      // Invalid app URL does not expand the frame allowlist.
+    }
+  }
+  if (isDev) {
+    sources.add("http://localhost:*");
+    sources.add("http://*.localhost:*");
+  }
+  const hostName = host.split(":")[0].toLowerCase();
+  if (hostName && hostName !== "localhost" && !hostName.endsWith(".localhost")) {
+    sources.add(`https://${hostName}`);
+  }
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com",
+    "font-src 'self' data:",
+    "connect-src 'self' blob: data:",
+    "worker-src 'self' blob:",
+    "media-src 'self' https://res.cloudinary.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    `frame-src ${[...sources].join(" ")}`,
+    `frame-ancestors ${[...sources].join(" ")}`,
+  ].join("; ");
+}
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -44,15 +82,19 @@ interface MiddlewareJWTPayload {
 }
 
 const isWriteMethod = (method: string) => !["GET", "HEAD", "OPTIONS"].includes(method);
+const getBearerToken = (request: NextRequest) => {
+  const authorization = request.headers.get("authorization");
+  return authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;
+};
 
 // Shared by the protected and the public-write paths below. Fails open on a
 // limiter error: a Redis outage shouldn't take down every write (the limiter
 // itself already falls back to in-memory before it ever throws).
 async function writeRateLimited(key: string): Promise<NextResponse | null> {
   const rl = await checkRateLimit(key, WRITE_LIMIT, WRITE_WINDOW_MS).catch(() => ({
-    allowed: true,
+    allowed: process.env.NODE_ENV !== "production",
     remaining: 0,
-    resetAt: 0,
+    resetAt: Date.now() + WRITE_WINDOW_MS,
   }));
   if (rl.allowed) return null;
   return NextResponse.json(
@@ -63,6 +105,8 @@ async function writeRateLimited(key: string): Promise<NextResponse | null> {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const pageNonce = pathname.startsWith("/api/") ? null : btoa(crypto.randomUUID());
+  const pageCsp = pageNonce ? buildCsp(pageNonce, request.headers.get("host") ?? "") : null;
 
   // ── CSRF — Origin check, every non-GET /api/* request ──────────────────────
   // Centralized here instead of duplicated in all ~50 write route handlers:
@@ -95,15 +139,23 @@ export async function proxy(request: NextRequest) {
   const nextWithSlug = (extraHeaders?: Record<string, string>) => {
     const headers = new Headers(request.headers);
     if (slug) headers.set("x-club-slug", slug);
+    if (pageNonce && pageCsp) {
+      headers.set("x-nonce", pageNonce);
+      headers.set("Content-Security-Policy", pageCsp);
+    }
     if (extraHeaders) {
       for (const [k, v] of Object.entries(extraHeaders)) headers.set(k, v);
     }
     if (slug && process.env.NODE_ENV !== "production" && !isOAuthCallback) {
       const rewrittenUrl = request.nextUrl.clone();
       rewrittenUrl.searchParams.set("club", slug);
-      return NextResponse.rewrite(rewrittenUrl, { request: { headers } });
+      const response = NextResponse.rewrite(rewrittenUrl, { request: { headers } });
+      if (pageCsp) response.headers.set("Content-Security-Policy", pageCsp);
+      return response;
     }
-    return NextResponse.next({ request: { headers } });
+    const response = NextResponse.next({ request: { headers } });
+    if (pageCsp) response.headers.set("Content-Security-Policy", pageCsp);
+    return response;
   };
 
   // ── Static / auth / public routes — skip auth check ───────────────────────
@@ -144,10 +196,10 @@ export async function proxy(request: NextRequest) {
   if (!isProtected) {
     if (isApiRoute && isWriteMethod(request.method) && !pathname.startsWith("/api/cron")) {
       let key = `write-ip:${getClientIp(request)}`;
-      const cookieToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-      if (cookieToken && JWT_SECRET) {
+      const requestToken = request.cookies.get(AUTH_COOKIE_NAME)?.value ?? getBearerToken(request);
+      if (requestToken && JWT_SECRET) {
         try {
-          const { payload } = await jwtVerify(cookieToken, new TextEncoder().encode(JWT_SECRET));
+          const { payload } = await jwtVerify(requestToken, new TextEncoder().encode(JWT_SECRET));
           if (typeof payload.id === "string") key = `write:${payload.id}`;
         } catch {
           /* invalid token: keep the IP key, the route's own auth will reject it */
@@ -160,7 +212,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // ── Auth check ─────────────────────────────────────────────────────────────
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value ?? (isApiRoute ? getBearerToken(request) : null);
 
   if (!token) {
     log.warn("proxy_401_unauthenticated", { path: request.nextUrl.pathname });
@@ -258,6 +310,7 @@ export const config = {
     "/offres/:path*",
     "/actualites/:path*",
     "/(public)/:path*",
+    "/((?!api/|_next/|favicon.ico).*)",
     "/api/settings/public",
     "/api/plans/public",
     "/api/coaches/public",

@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { bookedAt: "desc" },
+      take: 1000,
     });
 
     const upcoming: typeof userSessions = [];

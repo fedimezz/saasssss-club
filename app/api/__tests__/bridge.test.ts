@@ -10,6 +10,14 @@ const OWNER = { id: "owner-1", email: "o@c.test", role: "OWNER", name: "Owner", 
 
 const userFindUnique = vi.fn();
 const clubFindUnique = vi.fn();
+const consumedBridgeKeys = new Set<string>();
+vi.mock("@/lib/one-time", () => ({
+  consumeOnce: vi.fn(async (key: string) => {
+    if (consumedBridgeKeys.has(key)) return false;
+    consumedBridgeKeys.add(key);
+    return true;
+  }),
+}));
 vi.mock("@/lib/prisma", () => ({
   default: {
     user: { findUnique: (...a: unknown[]) => userFindUnique(...a) },
@@ -22,6 +30,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  consumedBridgeKeys.clear();
   userFindUnique.mockResolvedValue(OWNER);
   clubFindUnique.mockImplementation(async ({ where }: { where: { slug?: string } }) => (where.slug === CLUB.slug ? CLUB : null));
 });

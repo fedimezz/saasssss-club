@@ -18,9 +18,12 @@ describe("verifyOrigin (same-origin rule)", () => {
     expect(verifyOrigin(r)).toBeNull();
   });
 
-  it("allows same-origin behind a proxy that sets x-forwarded-host", () => {
-    const r = req({ host: "internal:3000", "x-forwarded-host": "club-a.yoursaas.test", origin: "https://club-a.yoursaas.test" });
-    expect(verifyOrigin(r)).toBeNull();
+  it("does not trust a caller-controlled x-forwarded-host", () => {
+    const r = req(
+      { host: "internal:3000", "x-forwarded-host": "club-a.yoursaas.test", origin: "https://club-a.yoursaas.test" },
+      "https://internal:3000/api/x"
+    );
+    expect(verifyOrigin(r)?.status).toBe(403);
   });
 
   it("REJECTS another tenant's subdomain (a hostile club's page must not write to yours)", () => {

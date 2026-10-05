@@ -25,8 +25,9 @@ describe("emailSchema", () => {
 });
 
 describe("passwordSchema", () => {
-  it("accepts an 8+ character password", () => {
-    expect(passwordSchema.safeParse("secret12").success).toBe(true);
+  it("accepts a password meeting length and character requirements", () => {
+    expect(passwordSchema.safeParse("Secret12").success).toBe(true);
+    expect(passwordSchema.safeParse("secret12").success).toBe(false);
   });
 
   it("rejects a password under 8 characters", () => {
